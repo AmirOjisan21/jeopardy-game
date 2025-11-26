@@ -2,7 +2,12 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import QRCode from 'react-qr-code';
 
-const socket = io('http://10.163.48.101:3001');
+const socket = io(
+  window.location.hostname === 'localhost'
+    ? 'http://localhost:3001'
+    : window.location.origin
+);
+
 
 
 const POINT_VALUES = [200, 400, 600, 800, 1000];
@@ -481,7 +486,10 @@ const newGame = () => {
   };
 
 
-  const buzzerUrl = `http://10.163.48.101:8080?room=${roomCode}`;
+  const buzzerUrl = window.location.hostname === 'localhost'
+  ? `http://192.168.1.100:8080?room=${roomCode}`
+  : `${window.location.origin}/buzzer?room=${roomCode}`;
+
 
   // SETUP SCREEN
   if (screen === 'setup') {
@@ -748,10 +756,15 @@ const newGame = () => {
                 
                 <div className="bg-gradient-to-br from-purple-100 to-blue-100 w-72 h-72 mx-auto rounded-3xl flex items-center justify-center mb-8 border-4 border-purple-300 shadow-xl">
                     <QRCode
-                       value={`http://10.163.48.101:8080?room=${roomCode}`}
-                       size={256}
-                       level="H"
-                   />
+  value={
+    window.location.hostname === 'localhost'
+      ? `http://192.168.1.100:8080?room=${roomCode}`
+      : `${window.location.origin}/buzzer?room=${roomCode}`
+  }
+  size={256}
+  level="H"
+/>
+
                 </div>
 
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-5 rounded-2xl mb-6 border-2 border-blue-200">
