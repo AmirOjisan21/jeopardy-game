@@ -193,7 +193,7 @@ app.get('/buzzer', (req, res) => {
 });
 
 // NEW - All other routes serve React app
-app.get('*', (req, res) => {
+app.get('.*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/build/index.html'));
 });
 
