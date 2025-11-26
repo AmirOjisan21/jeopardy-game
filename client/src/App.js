@@ -1266,14 +1266,14 @@ if (screen === 'player-selection') {
                               {player.name}
                             </h3>
                             <p className={`text-xl mt-1 ${isWinner ? 'text-gray-700' : 'text-white/80'}`}>
-                              Wagered: ${wager} • {wasCorrect ? '✅ Correct' : '❌ Wrong'}
+                              Wagered: {wager} • {wasCorrect ? '✅ Correct' : '❌ Wrong'}
                             </p>
                           </div>
                         </div>
                         
                         <div className="text-right">
                           <div className={`text-5xl font-black ${isWinner ? 'text-gray-900' : 'text-yellow-300'}`}>
-                            ${player.score}
+                            {player.score}
                           </div>
                           {isWinner && (
                             <div className="text-4xl mt-2 animate-bounce">👑</div>
