@@ -310,7 +310,12 @@
       }
     });
     
-    const socket = io('http://10.163.48.101:3001');
+    const socket = io(
+  window.location.hostname === 'localhost'
+    ? 'http://10.163.48.101:3001'
+    : window.location.origin
+);
+
     const buzzerBtn = document.getElementById('buzzer-btn');
     const status = document.getElementById('status');
     const playerIconDisplay = document.getElementById('player-icon');
