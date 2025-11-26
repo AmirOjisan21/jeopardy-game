@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIG Buzzer</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+    }
+    
+    .screen {
+      display: none;
+    }
+    
+    .screen.active {
+      display: block;
+    }
+    
+    h1 {
+      color: white;
+      font-size: 2.5rem;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .registration {
+      background: white;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    
+    .registration h2 {
+      color: #333;
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    
+    .form-group label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #555;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      font-size: 1.1rem;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      transition: border 0.3s;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .icon-selector {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .icon-option {
+      font-size: 3rem;
+      padding: 15px;
+      border: 3px solid #ddd;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+    }
+    
+    .icon-option:hover {
+      transform: scale(1.1);
+    }
+    
+    .icon-option.selected {
+      border-color: #667eea;
+      background: #f0f0ff;
+      transform: scale(1.1);
+    }
+    
+    .join-btn {
+      width: 100%;
+      padding: 15px;
+      font-size: 1.3rem;
+      font-weight: bold;
+      color: white;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: transform 0.2s;
+    }
+    
+    .join-btn:hover {
+      transform: translateY(-2px);
+    }
+    
+    .join-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    #buzzer-btn {
+      width: 250px;
+      height: 250px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(145deg, #ff6b6b, #ee5a52);
+      color: white;
+      font-size: 2rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      transition: all 0.1s;
+      margin: 20px auto;
+    }
+    
+    #buzzer-btn:active {
+      transform: scale(0.95);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    
+    #buzzer-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    #buzzer-btn.locked {
+      background: linear-gradient(145deg, #7c7c7c, #6c6c6c);
+      cursor: not-allowed;
+      box-shadow: none;
+      opacity: 0.7;
+    }
+
+    #buzzer-btn.locked:active {
+      transform: none;
+      box-shadow: none;
+    }
+    
+    #status {
+      color: white;
+      font-size: 1.2rem;
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 10px;
+    }
+    
+    .player-info {
+      background: rgba(255,255,255,0.9);
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 30px;
+    }
+    
+    .player-icon {
+      font-size: 4rem;
+      margin-bottom: 10px;
+    }
+    
+    .player-name {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #333;
+    }
+
+    @media (max-width: 400px) {
+    h1 {
+      font-size: 1.8rem;
+    }
+    
+    .icon-option {
+      font-size: 2rem;
+      padding: 8px;
+    }
+    
+    .registration {
+      padding: 15px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎮 MATH IS GAY</h1>
+    
+    <div id="registration-screen" class="screen active">
+      <div class="registration">
+        <h2>Join the Game!</h2>
+        
+        <div class="form-group">
+          <label for="player-name-input">Your Name:</label>
+          <input 
+            type="text" 
+            id="player-name-input" 
+            placeholder="Enter your name"
+            maxlength="20"
+          >
+        </div>
+        
+        <div class="form-group">
+          <label>Choose Your Icon:</label>
+          <div class="icon-selector" id="icon-selector">
+            <div class="icon-option" data-icon="🐵">🐵</div>
+            <div class="icon-option" data-icon="👩">👩</div>
+            <div class="icon-option" data-icon="🧑">🧑</div>
+            <div class="icon-option" data-icon="👨‍🚀">👨‍🚀</div>
+            <div class="icon-option" data-icon="💩">💩</div>
+            <div class="icon-option" data-icon="🤓">🤓</div>
+            <div class="icon-option" data-icon="🦸">🦸</div>
+            <div class="icon-option" data-icon="🧙">🧙</div>
+            <div class="icon-option" data-icon="🤖">🤖</div>
+          </div>
+        </div>
+        
+        <button id="join-btn" class="join-btn" disabled>Join Game</button>
+      </div>
+    </div>
+    
+    <div id="buzzer-screen" class="screen">
+      <div class="player-info">
+        <div class="player-icon" id="player-icon"></div>
+        <div class="player-name" id="player-name"></div>
+      </div>
+      
+      <button id="buzzer-btn">BUZZ!</button>
+      <div id="status">Connecting...</div>
+    </div>
+  </div>
+
+  <script>
+    const registrationScreen = document.getElementById('registration-screen');
+    const buzzerScreen = document.getElementById('buzzer-screen');
+    const nameInput = document.getElementById('player-name-input');
+    const iconSelector = document.getElementById('icon-selector');
+    const joinBtn = document.getElementById('join-btn');
+    
+    let selectedIcon = null;
+    let playerName = '';
+    let finalJeopardyMode = null; // NEW
+    let currentScore = 0; // NEW
+    let isLockedOut = false;
+    
+    // Get room code from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCode = urlParams.get('room') || 'DEFAULT';
+
+    
+    iconSelector.addEventListener('click', (e) => {
+      if (e.target.classList.contains('icon-option')) {
+        document.querySelectorAll('.icon-option').forEach(opt => {
+          opt.classList.remove('selected');
+        });
+        
+        e.target.classList.add('selected');
+        selectedIcon = e.target.dataset.icon;
+        checkFormValid();
+      }
+    });
+    
+    nameInput.addEventListener('input', (e) => {
+      playerName = e.target.value.trim();
+      checkFormValid();
+    });
+    
+    function checkFormValid() {
+      if (playerName && selectedIcon) {
+        joinBtn.disabled = false;
+      } else {
+        joinBtn.disabled = true;
+      }
+    }
+    
+    joinBtn.addEventListener('click', () => {
+      if (playerName && selectedIcon) {
+        joinGame(playerName, selectedIcon);
+      }
+    });
+    
+    const socket = io('http://10.163.48.101:3001');
+    const buzzerBtn = document.getElementById('buzzer-btn');
+    const status = document.getElementById('status');
+    const playerIconDisplay = document.getElementById('player-icon');
+    const playerNameDisplay = document.getElementById('player-name');
+    
+    function joinGame(name, icon) {
+      registrationScreen.classList.remove('active');
+      buzzerScreen.classList.add('active');
+      
+      playerIconDisplay.textContent = icon;
+      playerNameDisplay.textContent = name;
+      
+      socket.emit('join-game', { name, icon, roomCode });
+      status.textContent = 'Connected! Ready to buzz!';
+      buzzerBtn.disabled = false;
+    }
+
+    // NEW FUNCTIONS - Final Jeopardy screens
+    function showWageringScreen() {
+  document.querySelector('.container').innerHTML = `
+    <h1>🏆 FINAL JEOPARDY</h1>
+    <div class="registration">
+      <h2>Place Your Wager</h2>
+      <div class="player-info" style="margin-bottom: 20px;">
+        <div style="font-size: 3rem;">${selectedIcon}</div>
+        <div style="font-size: 1.3rem; font-weight: bold;">${playerName}</div>
+        <div style="font-size: 1.5rem; color: ${currentScore >= 0 ? '#667eea' : '#ef4444'}; margin-top: 10px;">Score: ${currentScore}</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="wager-input">Enter Your Wager:</label>
+        <input 
+          type="number" 
+          id="wager-input" 
+          placeholder="0"
+          min="0"
+          max="${maxWager}"
+          style="text-align: center; font-size: 1.5rem; font-weight: bold;"
+        >
+        <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">Maximum: ${maxWager}</p>
+        ${currentScore < 0 ? '<p style="font-size: 0.85rem; color: #ef4444; margin-top: 5px;">⚠️ Negative score: Wager up to the positive value</p>' : ''}
+      </div>
+      
+      <button onclick="submitWager()" class="join-btn">Submit Wager</button>
+    </div>
+  `;
+}
+
+
+    function showAnsweringScreen() {
+      document.querySelector('.container').innerHTML = `
+        <h1>🏆 FINAL JEOPARDY</h1>
+        <div class="registration">
+          <h2>Submit Your Answer</h2>
+          <div class="player-info" style="margin-bottom: 20px;">
+            <div style="font-size: 3rem;">${selectedIcon}</div>
+            <div style="font-size: 1.3rem; font-weight: bold;">${playerName}</div>
+          </div>
+          
+          <div class="form-group">
+            <label for="answer-input">Your Answer:</label>
+            <input 
+              type="text" 
+              id="answer-input" 
+              placeholder="What is..."
+              style="font-size: 1.2rem;"
+            >
+          </div>
+          
+          <button onclick="submitFinalAnswer()" class="join-btn">Submit Answer</button>
+        </div>
+      `;
+    }
+
+    function submitWager() {
+      const wagerInput = document.getElementById('wager-input');
+      const wager = parseInt(wagerInput.value) || 0;
+      
+      if (wager < 0) {
+        alert('Wager cannot be negative!');
+        return;
+      }
+      if (wager > maxWager) {
+    alert(`You can't wager more than ${maxWager}!`);
+    return;
+    }
+      
+      socket.emit('submit-wager', {
+        roomCode: roomCode,
+        playerId: socket.id,
+        wager: wager
+      });
+      
+      document.querySelector('.container').innerHTML = `
+        <h1>🏆 FINAL JEOPARDY</h1>
+        <div class="registration">
+          <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 5rem; margin-bottom: 20px;">✅</div>
+            <h2 style="color: #10b981; margin-bottom: 10px;">Wager Submitted!</h2>
+            <p style="font-size: 2rem; color: #667eea; font-weight: bold;">${wager}</p>
+            <p style="color: #666; margin-top: 30px; font-size: 1.1rem;">Waiting for other players...</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function submitFinalAnswer() {
+      const answerInput = document.getElementById('answer-input');
+      const answer = answerInput.value.trim();
+      
+      if (!answer) {
+        alert('Please enter an answer!');
+        return;
+      }
+      
+      socket.emit('submit-final-answer', {
+        roomCode: roomCode,
+        playerId: socket.id,
+        answer: answer
+      });
+      
+      document.querySelector('.container').innerHTML = `
+        <h1>🏆 FINAL JEOPARDY</h1>
+        <div class="registration">
+          <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 5rem; margin-bottom: 20px;">✅</div>
+            <h2 style="color: #10b981; margin-bottom: 10px;">Answer Submitted!</h2>
+            <p style="font-size: 1.3rem; color: #333; margin-top: 20px;">"${answer}"</p>
+            <p style="color: #666; margin-top: 30px; font-size: 1.1rem;">Waiting for results...</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Socket event listeners
+    socket.on('connect', () => {
+      if (buzzerScreen.classList.contains('active')) {
+        status.textContent = 'Connected! Ready to buzz!';
+        buzzerBtn.disabled = false;
+      }
+    });
+    
+    socket.on('room-full', () => {
+      alert('Sorry! This game is full (maximum 6 players).');
+      status.textContent = 'Room is full!';
+      buzzerBtn.disabled = true;
+    });
+    
+    socket.on('disconnect', () => {
+      status.textContent = 'Disconnected! Reconnecting...';
+      buzzerBtn.disabled = true;
+    });
+    
+    socket.on('player-buzzed', (playerId) => {
+      if (playerId === socket.id) {
+        status.textContent = '🎉 YOU BUZZED IN!';
+        buzzerBtn.disabled = true;
+        buzzerBtn.classList.remove('locked');
+      } else {
+        status.textContent = 'Someone else buzzed first!';
+        buzzerBtn.disabled = true;
+        buzzerBtn.classList.add('locked');
+      }
+    });
+
+    socket.on('player-locked', () => {
+      isLockedOut = true;
+      status.textContent = '❌ You are LOCKED OUT this round!';
+      buzzerBtn.disabled = true;
+      buzzerBtn.classList.add('locked');
+    });
+
+    socket.on('buzzer-reset', () => {
+      if (isLockedOut) {
+        status.textContent = '❌ LOCKED OUT. Question still open.';
+        buzzerBtn.disabled = true;
+        buzzerBtn.classList.add('locked');
+      } else {
+        status.textContent = 'Ready to buzz!';
+        buzzerBtn.disabled = false;
+        buzzerBtn.classList.remove('locked');
+      }
+    });
+
+    socket.on('full-reset', () => {
+      isLockedOut = false;
+      status.textContent = 'Ready to buzz!';
+      buzzerBtn.disabled = false;
+      buzzerBtn.classList.remove('locked');
+    });
+
+    socket.on('full-reset-complete', () => {
+      isLockedOut = false;
+      status.textContent = 'Ready for next question!';
+      buzzerBtn.disabled = false;
+      buzzerBtn.classList.remove('locked');
+    });
+
+    socket.on('game-started', () => {
+      status.textContent = 'Game has started! Get ready!';
+    });
+
+    // NEW - Final Jeopardy listeners
+    socket.on('start-final-wagering', (data) => {
+      finalJeopardyMode = 'wagering';
+      currentScore = data.playerScore || 0;
+      maxWager = data.maxWager || Math.abs(currentScore);
+      showWageringScreen();
+    });
+
+    socket.on('start-final-question', () => {
+      finalJeopardyMode = 'answering';
+      showAnsweringScreen();
+    });
+    
+    buzzerBtn.addEventListener('click', () => {
+      socket.emit('buzz');
+      buzzerBtn.disabled = true;
+    });
+  </script>
+</body>
+</html>
