@@ -203,7 +203,6 @@
       color: #333;
     }
 
-    /* NEW - Reconnecting indicator */
     .reconnecting {
       background: rgba(255, 193, 7, 0.3);
       animation: pulse 1.5s infinite;
@@ -289,14 +288,15 @@
     let playerName = '';
     let finalJeopardyMode = null;
     let currentScore = 0;
+    let maxWager = 0;
     let isLockedOut = false;
-    let hasJoinedGame = false; // NEW - Track if player has joined
+    let hasJoinedGame = false;
     
     // Get room code from URL
     const urlParams = new URLSearchParams(window.location.search);
     const roomCode = urlParams.get('room') || 'DEFAULT';
 
-    // NEW - Try to load saved player data
+    // Try to load saved player data
     const savedPlayerData = localStorage.getItem(`jeopardy_player_${roomCode}`);
     
     iconSelector.addEventListener('click', (e) => {
@@ -326,7 +326,6 @@
     
     joinBtn.addEventListener('click', () => {
       if (playerName && selectedIcon) {
-        // NEW - Save player data to localStorage
         localStorage.setItem(`jeopardy_player_${roomCode}`, JSON.stringify({
           name: playerName,
           icon: selectedIcon
@@ -337,10 +336,9 @@
     
     const socket = io(
       window.location.hostname === 'localhost'
-        ? 'http://10.85.138.101:3001'
+        ? 'http://localhost:3001'
         : window.location.origin,
       {
-        // NEW - Better reconnection settings
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
@@ -368,16 +366,14 @@
       hasJoinedGame = true;
     }
 
-    // NEW - Auto-rejoin on page load if player data exists
+    // Auto-rejoin on page load if player data exists
     if (savedPlayerData) {
       try {
         const data = JSON.parse(savedPlayerData);
-        // Auto-fill form
         nameInput.value = data.name;
         playerName = data.name;
         selectedIcon = data.icon;
         
-        // Pre-select icon
         document.querySelectorAll('.icon-option').forEach(opt => {
           if (opt.dataset.icon === data.icon) {
             opt.classList.add('selected');
@@ -386,7 +382,6 @@
         
         checkFormValid();
         
-        // Try to rejoin automatically after 1 second
         setTimeout(() => {
           if (!hasJoinedGame) {
             joinGame(data.name, data.icon);
@@ -397,7 +392,7 @@
       }
     }
 
-    // NEW FUNCTIONS - Final Jeopardy screens
+    // Final Jeopardy screens
     function showWageringScreen() {
       document.querySelector('.container').innerHTML = `
         <h1>🏆 FINAL JEOPARDY</h1>
@@ -514,33 +509,40 @@
     }
     
     // Socket event listeners
-    socket.on('connect', () => {
-      console.log('Connected to server');
-      status.classList.remove('reconnecting');
-      
-      if (hasJoinedGame && playerName && selectedIcon) {
-        // Reconnecting - check if we can rejoin
-        socket.emit('check-rejoin', {
-          roomCode: roomCode,
-          playerName: playerName,
-          playerIcon: selectedIcon
-        });
-        status.textContent = 'Reconnecting...';
-      } else if (buzzerScreen.classList.contains('active')) {
-        status.textContent = 'Connected! Ready to buzz!';
-        buzzerBtn.disabled = false;
-      }
+socket.on('connect', () => {
+  console.log('Connected to server');
+  if (status) status.classList.remove('reconnecting');
+  
+  if (hasJoinedGame && playerName && selectedIcon) {
+    socket.emit('check-rejoin', {
+      roomCode: roomCode,
+      playerName: playerName,
+      playerIcon: selectedIcon
     });
+    if (status) status.textContent = 'Reconnecting...';
+    // Don't re-enable buzzer yet - wait for game state
+  } else if (buzzerScreen.classList.contains('active') && !finalJeopardyMode) {
+    if (status) status.textContent = 'Connected! Ready to buzz!';
+    if (buzzerBtn) buzzerBtn.disabled = false;
+  }
+});
 
-    // NEW - Handle successful rejoin
-    socket.on('rejoin-success', (playerData) => {
-      console.log('Successfully rejoined!');
+
+socket.on('rejoin-success', (playerData) => {
+  console.log('Successfully rejoined!');
+  hasJoinedGame = true;
+  
+  // Wait 500ms for server to send Final Jeopardy state (if in FJ mode)
+  setTimeout(() => {
+    // Only show buzzer screen if NOT in Final Jeopardy mode
+    if (!finalJeopardyMode && status && buzzerBtn) {
       status.textContent = 'Reconnected! Ready to buzz!';
       buzzerBtn.disabled = false;
-      hasJoinedGame = true;
-    });
+    }
+  }, 500);
+});
 
-    // NEW - Handle rejoin failure
+
     socket.on('rejoin-failed', () => {
       console.log('Rejoin failed - starting fresh');
       hasJoinedGame = false;
@@ -548,7 +550,6 @@
       buzzerScreen.classList.remove('active');
     });
 
-    // NEW - Handle being kicked
     socket.on('kicked-from-room', () => {
       localStorage.removeItem(`jeopardy_player_${roomCode}`);
       alert('You have been removed from the game by the host.');
@@ -557,61 +558,76 @@
     
     socket.on('disconnect', () => {
       console.log('Disconnected from server');
-      status.textContent = 'Connection lost! Reconnecting...';
-      status.classList.add('reconnecting');
-      buzzerBtn.disabled = true;
+      if (status) {
+        status.textContent = 'Connection lost! Reconnecting...';
+        status.classList.add('reconnecting');
+      }
+      if (buzzerBtn) buzzerBtn.disabled = true;
     });
     
     socket.on('player-buzzed', (playerId) => {
       if (playerId === socket.id) {
-        status.textContent = '🎉 YOU BUZZED IN!';
-        buzzerBtn.disabled = true;
-        buzzerBtn.classList.remove('locked');
+        if (status) status.textContent = '🎉 YOU BUZZED IN!';
+        if (buzzerBtn) {
+          buzzerBtn.disabled = true;
+          buzzerBtn.classList.remove('locked');
+        }
       } else {
-        status.textContent = 'Someone else buzzed first!';
-        buzzerBtn.disabled = true;
-        buzzerBtn.classList.add('locked');
+        if (status) status.textContent = 'Someone else buzzed first!';
+        if (buzzerBtn) {
+          buzzerBtn.disabled = true;
+          buzzerBtn.classList.add('locked');
+        }
       }
     });
 
     socket.on('player-locked', () => {
       isLockedOut = true;
-      status.textContent = '❌ You are LOCKED OUT this round!';
-      buzzerBtn.disabled = true;
-      buzzerBtn.classList.add('locked');
+      if (status) status.textContent = '❌ You are LOCKED OUT this round!';
+      if (buzzerBtn) {
+        buzzerBtn.disabled = true;
+        buzzerBtn.classList.add('locked');
+      }
     });
 
     socket.on('buzzer-reset', () => {
       if (isLockedOut) {
-        status.textContent = '❌ LOCKED OUT. Question still open.';
-        buzzerBtn.disabled = true;
-        buzzerBtn.classList.add('locked');
+        if (status) status.textContent = '❌ LOCKED OUT. Question still open.';
+        if (buzzerBtn) {
+          buzzerBtn.disabled = true;
+          buzzerBtn.classList.add('locked');
+        }
       } else {
-        status.textContent = 'Ready to buzz!';
-        buzzerBtn.disabled = false;
-        buzzerBtn.classList.remove('locked');
+        if (status) status.textContent = 'Ready to buzz!';
+        if (buzzerBtn) {
+          buzzerBtn.disabled = false;
+          buzzerBtn.classList.remove('locked');
+        }
       }
     });
 
     socket.on('full-reset', () => {
       isLockedOut = false;
-      status.textContent = 'Ready to buzz!';
-      buzzerBtn.disabled = false;
-      buzzerBtn.classList.remove('locked');
+      if (status) status.textContent = 'Ready to buzz!';
+      if (buzzerBtn) {
+        buzzerBtn.disabled = false;
+        buzzerBtn.classList.remove('locked');
+      }
     });
 
     socket.on('full-reset-complete', () => {
       isLockedOut = false;
-      status.textContent = 'Ready for next question!';
-      buzzerBtn.disabled = false;
-      buzzerBtn.classList.remove('locked');
+      if (status) status.textContent = 'Ready for next question!';
+      if (buzzerBtn) {
+        buzzerBtn.disabled = false;
+        buzzerBtn.classList.remove('locked');
+      }
     });
 
     socket.on('game-started', () => {
-      status.textContent = 'Game has started! Get ready!';
+      if (status) status.textContent = 'Game has started! Get ready!';
     });
 
-    // Final Jeopardy listeners
     socket.on('start-final-wagering', (data) => {
       finalJeopardyMode = 'wagering';
       currentScore = data.playerScore || 0;
@@ -623,11 +639,53 @@
       finalJeopardyMode = 'answering';
       showAnsweringScreen();
     });
-    
-    buzzerBtn.addEventListener('click', () => {
-      socket.emit('buzz');
-      buzzerBtn.disabled = true;
+
+    // NEW - Restore Final Jeopardy state on reconnect
+    socket.on('restore-final-jeopardy-state', (state) => {
+      console.log('Restoring Final Jeopardy state:', state);
+      finalJeopardyMode = state.phase;
+      
+      if (state.phase === 'wagering') {
+        if (state.hasWagered) {
+          document.querySelector('.container').innerHTML = `
+            <h1>🏆 FINAL JEOPARDY</h1>
+            <div class="registration">
+              <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 5rem; margin-bottom: 20px;">✅</div>
+                <h2 style="color: #10b981; margin-bottom: 10px;">Wager Submitted!</h2>
+                <p style="font-size: 2rem; color: #667eea; font-weight: bold;">$${state.wager || 0}</p>
+                <p style="color: #666; margin-top: 30px; font-size: 1.1rem;">Waiting for other players...</p>
+              </div>
+            </div>
+          `;
+        } else {
+          showWageringScreen();
+        }
+      } else if (state.phase === 'question') {
+        if (state.hasAnswered) {
+          document.querySelector('.container').innerHTML = `
+            <h1>🏆 FINAL JEOPARDY</h1>
+            <div class="registration">
+              <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 5rem; margin-bottom: 20px;">✅</div>
+                <h2 style="color: #10b981; margin-bottom: 10px;">Answer Submitted!</h2>
+                <p style="font-size: 1.3rem; color: #333; margin-top: 20px;">"${state.answer || ''}"</p>
+                <p style="color: #666; margin-top: 30px; font-size: 1.1rem;">Waiting for results...</p>
+              </div>
+            </div>
+          `;
+        } else {
+          showAnsweringScreen();
+        }
+      }
     });
+    
+    if (buzzerBtn) {
+      buzzerBtn.addEventListener('click', () => {
+        socket.emit('buzz');
+        buzzerBtn.disabled = true;
+      });
+    }
   </script>
 </body>
 </html>
