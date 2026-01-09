@@ -32,9 +32,9 @@ io.on('connection', (socket) => {
       lockedPlayers: new Set(),
       gameStarted: false,
       activePlayerId: null,
-      finalJeopardyPhase: null, // NEW - Track Final Jeopardy phase
-      playerWagers: {}, // NEW - Track wagers
-      playerAnswers: {} // NEW - Track answers
+      finalJeopardyPhase: null,
+      playerWagers: {},
+      playerAnswers: {}
     };
     currentRoom = roomCode;
     socket.join(roomCode);
@@ -65,18 +65,18 @@ io.on('connection', (socket) => {
         socket.emit('active-player-update', rooms[roomCode].activePlayerId);
       }
       
-      // NEW - Send Final Jeopardy state to reconnecting client
+      // Send Final Jeopardy state to reconnecting client (use playerName)
       if (rooms[roomCode].finalJeopardyPhase) {
         const phase = rooms[roomCode].finalJeopardyPhase;
-        const playerId = existingPlayer.id;
+        const playerName = existingPlayer.name; // Use name for lookup
         
         socket.emit('restore-final-jeopardy-state', {
           phase: phase,
           playerScore: existingPlayer.score,
-          hasWagered: rooms[roomCode].playerWagers[playerId] !== undefined,
-          hasAnswered: rooms[roomCode].playerAnswers[playerId] !== undefined,
-          wager: rooms[roomCode].playerWagers[playerId],
-          answer: rooms[roomCode].playerAnswers[playerId]
+          hasWagered: rooms[roomCode].playerWagers[playerName] !== undefined,
+          hasAnswered: rooms[roomCode].playerAnswers[playerName] !== undefined,
+          wager: rooms[roomCode].playerWagers[playerName],
+          answer: rooms[roomCode].playerAnswers[playerName]
         });
         
         console.log(`Restored Final Jeopardy state (${phase}) for ${playerName}`);
@@ -122,17 +122,18 @@ io.on('connection', (socket) => {
         socket.emit('active-player-update', rooms[roomCode].activePlayerId);
       }
       
-      // NEW - Send Final Jeopardy state to reconnecting client
+      // Send Final Jeopardy state to reconnecting client (use playerName)
       if (rooms[roomCode].finalJeopardyPhase) {
         const phase = rooms[roomCode].finalJeopardyPhase;
-        const playerId = existingPlayer.id;
+        const playerName = existingPlayer.name; // Use name for lookup
         
         socket.emit('restore-final-jeopardy-state', {
           phase: phase,
-          hasWagered: rooms[roomCode].playerWagers[playerId] !== undefined,
-          hasAnswered: rooms[roomCode].playerAnswers[playerId] !== undefined,
-          wager: rooms[roomCode].playerWagers[playerId],
-          answer: rooms[roomCode].playerAnswers[playerId]
+          playerScore: existingPlayer.score,
+          hasWagered: rooms[roomCode].playerWagers[playerName] !== undefined,
+          hasAnswered: rooms[roomCode].playerAnswers[playerName] !== undefined,
+          wager: rooms[roomCode].playerWagers[playerName],
+          answer: rooms[roomCode].playerAnswers[playerName]
         });
       }
       
@@ -239,69 +240,39 @@ io.on('connection', (socket) => {
   });
 
   // Final Jeopardy: Start Wagering
-socket.on('start-final-wagering', (roomCode) => {
-  const room = rooms[roomCode];
-  if (room) {
-    room.finalJeopardyPhase = 'wagering';
-    // NEW - Reset wagers when starting fresh
-    room.playerWagers = {};
-    room.playerAnswers = {};
-    
-    room.players.forEach(player => {
-      io.to(player.id).emit('start-final-wagering', { 
-        playerScore: player.score,
-        maxWager: Math.abs(player.score)
+  socket.on('start-final-wagering', (roomCode) => {
+    const room = rooms[roomCode];
+    if (room) {
+      room.finalJeopardyPhase = 'wagering';
+      room.playerWagers = {};
+      room.playerAnswers = {};
+      
+      room.players.forEach(player => {
+        io.to(player.id).emit('start-final-wagering', { 
+          playerScore: player.score,
+          maxWager: Math.abs(player.score)
+        });
       });
-    });
-    console.log(`Final Jeopardy wagering started in room ${roomCode}`);
-  }
-});
-
-// Final Jeopardy: Submit Wager - NEW: Use player name as key
-socket.on('submit-wager', ({ roomCode, playerId, wager }) => {
-  if (rooms[roomCode]) {
-    // Find player by socket ID
-    const player = rooms[roomCode].players.find(p => p.id === playerId);
-    if (player) {
-      // Store by NAME instead of ID
-      rooms[roomCode].playerWagers[player.name] = wager;
-      console.log(`Player ${player.name} wagered $${wager}`);
-      
-      // Broadcast to host with player name
-      io.to(roomCode).emit('wager-submitted', { playerId: player.name, wager });
+      console.log(`Final Jeopardy wagering started in room ${roomCode}`);
     }
-  }
-});
-
-// Final Jeopardy: Submit Answer - NEW: Use player name as key  
-socket.on('submit-final-answer', ({ roomCode, playerId, answer }) => {
-  if (rooms[roomCode]) {
-    const player = rooms[roomCode].players.find(p => p.id === playerId);
-    if (player) {
-      // Store by NAME instead of ID
-      rooms[roomCode].playerAnswers[player.name] = answer;
-      console.log(`Player ${player.name} answered: ${answer}`);
-      
-      // Broadcast to host with player name
-      io.to(roomCode).emit('final-answer-submitted', { playerId: player.name, answer });
-    }
-  }
-});
-
+  });
 
   // Final Jeopardy: Submit Wager
   socket.on('submit-wager', ({ roomCode, playerId, wager }) => {
     if (rooms[roomCode]) {
-      rooms[roomCode].playerWagers[playerId] = wager; // NEW - Store wager
+      const player = rooms[roomCode].players.find(p => p.id === playerId);
+      if (player) {
+        rooms[roomCode].playerWagers[player.name] = wager;
+        console.log(`Player ${player.name} wagered $${wager}`);
+        io.to(roomCode).emit('wager-submitted', { playerId: player.name, wager });
+      }
     }
-    console.log(`Player ${playerId} wagered $${wager}`);
-    io.to(roomCode).emit('wager-submitted', { playerId, wager });
   });
 
   // Final Jeopardy: Start Question
   socket.on('start-final-question', (roomCode) => {
     if (rooms[roomCode]) {
-      rooms[roomCode].finalJeopardyPhase = 'question'; // NEW - Track phase
+      rooms[roomCode].finalJeopardyPhase = 'question';
     }
     io.to(roomCode).emit('start-final-question');
     console.log(`Final Jeopardy question revealed in room ${roomCode}`);
@@ -310,10 +281,13 @@ socket.on('submit-final-answer', ({ roomCode, playerId, answer }) => {
   // Final Jeopardy: Submit Answer
   socket.on('submit-final-answer', ({ roomCode, playerId, answer }) => {
     if (rooms[roomCode]) {
-      rooms[roomCode].playerAnswers[playerId] = answer; // NEW - Store answer
+      const player = rooms[roomCode].players.find(p => p.id === playerId);
+      if (player) {
+        rooms[roomCode].playerAnswers[player.name] = answer;
+        console.log(`Player ${player.name} answered: ${answer}`);
+        io.to(roomCode).emit('final-answer-submitted', { playerId: player.name, answer });
+      }
     }
-    console.log(`Player ${playerId} answered: ${answer}`);
-    io.to(roomCode).emit('final-answer-submitted', { playerId, answer });
   });
 
   // Disconnect
