@@ -1194,7 +1194,7 @@ if (screen === 'player-selection') {
                 ))}
              </div>
              <button
-  onClick={() => setFinalJeopardyPhase('results')}
+  onClick={() => setFinalJeopardyPhase('review')}
   disabled={players.filter(p => playerAnswers[p.name] !== undefined).length !== players.length}
   className={`px-8 py-4 text-xl font-bold rounded-xl transition-all ${
     players.filter(p => playerAnswers[p.name] !== undefined).length === players.length
