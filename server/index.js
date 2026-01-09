@@ -11,7 +11,6 @@ const io = socketIo(server, {
     origin: "*",
     methods: ["GET", "POST"]
   },
-  // NEW - Better reconnection settings
   pingTimeout: 60000,
   pingInterval: 25000
 });
@@ -31,14 +30,15 @@ io.on('connection', (socket) => {
       players: [],
       buzzedPlayer: null,
       lockedPlayers: new Set(),
-      gameStarted: false // NEW - Track game state
+      gameStarted: false,
+      activePlayerId: null // NEW - Track active player
     };
     currentRoom = roomCode;
     socket.join(roomCode);
     console.log(`Room created: ${roomCode}`);
   });
 
-  // NEW - Check if player already exists (for reconnection)
+  // Check if player already exists (for reconnection)
   socket.on('check-rejoin', ({ roomCode, playerName, playerIcon }) => {
     if (!rooms[roomCode]) {
       socket.emit('room-not-found');
@@ -56,6 +56,12 @@ io.on('connection', (socket) => {
       socket.join(roomCode);
       socket.emit('rejoin-success', existingPlayer);
       io.to(roomCode).emit('players-update', rooms[roomCode].players);
+      
+      // NEW - Send active player to reconnecting client
+      if (rooms[roomCode].activePlayerId) {
+        socket.emit('active-player-update', rooms[roomCode].activePlayerId);
+      }
+      
       console.log(`${playerName} reconnected to room ${roomCode}`);
     } else {
       socket.emit('rejoin-failed');
@@ -72,11 +78,12 @@ io.on('connection', (socket) => {
         players: [], 
         buzzedPlayer: null, 
         lockedPlayers: new Set(),
-        gameStarted: false 
+        gameStarted: false,
+        activePlayerId: null // NEW
       };
     }
 
-    // NEW - Check if player already exists (prevent duplicates)
+    // Check if player already exists (prevent duplicates)
     const existingPlayer = rooms[roomCode].players.find(
       p => p.name === playerData.name && p.icon === playerData.icon
     );
@@ -86,11 +93,16 @@ io.on('connection', (socket) => {
       existingPlayer.id = socket.id;
       socket.join(roomCode);
       io.to(roomCode).emit('players-update', rooms[roomCode].players);
+      
+      // NEW - Send active player to reconnecting client
+      if (rooms[roomCode].activePlayerId) {
+        socket.emit('active-player-update', rooms[roomCode].activePlayerId);
+      }
+      
       console.log(`${playerData.name} reconnected (duplicate prevented)`);
       return;
     }
 
-    // NEW - No more player limit!
     const player = {
       id: socket.id,
       name: playerData.name,
@@ -104,11 +116,27 @@ io.on('connection', (socket) => {
     console.log(`${playerData.name} joined room ${roomCode} (${rooms[roomCode].players.length} players)`);
   });
 
-  // NEW - Kick player (host only, waiting room only)
+  // NEW - Set active player (host updates)
+  socket.on('set-active-player', (roomCode, playerId) => {
+    if (rooms[roomCode]) {
+      rooms[roomCode].activePlayerId = playerId;
+      io.to(roomCode).emit('active-player-update', playerId);
+      console.log(`Active player set to ${playerId} in room ${roomCode}`);
+    }
+  });
+
+  // Kick player (host only, waiting room only)
   socket.on('kick-player', ({ roomCode, playerId }) => {
     if (!rooms[roomCode] || rooms[roomCode].gameStarted) return;
     
     rooms[roomCode].players = rooms[roomCode].players.filter(p => p.id !== playerId);
+    
+    // NEW - If kicked player was active, clear active player
+    if (rooms[roomCode].activePlayerId === playerId) {
+      rooms[roomCode].activePlayerId = null;
+      io.to(roomCode).emit('active-player-update', null);
+    }
+    
     io.to(playerId).emit('kicked-from-room');
     io.to(roomCode).emit('players-update', rooms[roomCode].players);
     console.log(`Player ${playerId} kicked from room ${roomCode}`);
@@ -165,7 +193,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Start game - NEW: Mark game as started
+  // Start game
   socket.on('start-game', () => {
     if (currentRoom && rooms[currentRoom]) {
       rooms[currentRoom].gameStarted = true;
@@ -206,11 +234,10 @@ io.on('connection', (socket) => {
     console.log(`Final Jeopardy question revealed in room ${roomCode}`);
   });
 
-  // Disconnect - NEW: Keep player in list (don't remove immediately)
+  // Disconnect - Keep player in list (can reconnect)
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
     // Player stays in the room - can reconnect
-    // Only removed if kicked or room is deleted
   });
 });
 

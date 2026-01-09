@@ -100,6 +100,10 @@ export default function App() {
     setPlayersReady(prev => new Set([...prev, playerId]));
     });
 
+    socket.on('active-player-update', (playerId) => {
+    setActivePlayerId(playerId);
+  });
+
     
 
     return () => {
@@ -108,6 +112,7 @@ export default function App() {
       socket.off('buzzer-reset');
       socket.off('wager-submitted');
       socket.off('final-answer-submitted');
+      socket.off('active-player-update');
     };
   }, [lockedPlayers]);
 
@@ -165,6 +170,7 @@ useEffect(() => {
       // Animation complete
       setIsSelecting(false);
       setActivePlayerId(players[currentIndex].id);
+      socket.emit('set-active-player', roomCode, players[currentIndex].id);
       
       setTimeout(() => {
         console.log('Transitioning to game...');
@@ -372,6 +378,7 @@ useEffect(() => {
       playSound('correct');
 
       setActivePlayerId(buzzedPlayerId);
+      socket.emit('set-active-player', roomCode, buzzedPlayerId);
       
       const video = getRandomVideo(correctVideos);
       setPlayingVideo({ url: video, type: 'correct' });
@@ -1000,7 +1007,7 @@ if (screen === 'player-selection') {
                 <div className={`text-5xl mb-2 ${isBuzzed ? 'animate-bounce' : ''}`}>{player.icon}</div>
                 <h3 className="text-lg font-bold text-gray-800 mb-1 truncate">{player.name}</h3>
                 <div className={`text-2xl font-black ${isBuzzed ? 'text-yellow-500' : 'text-blue-600'}`}>{player.score}</div>
-                {isActive && !currentQuestion && <div className="text-xl mt-1">👑</div>}
+                {isActive && !currentQuestion && <div className="text-xl mt-1">🫵</div>}
               </div>
             </div>
           );
