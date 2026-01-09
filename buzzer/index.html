@@ -644,6 +644,9 @@ socket.on('rejoin-success', (playerData) => {
     socket.on('restore-final-jeopardy-state', (state) => {
       console.log('Restoring Final Jeopardy state:', state);
       finalJeopardyMode = state.phase;
+
+        currentScore = state.playerScore || 0;
+  maxWager = Math.abs(currentScore);
       
       if (state.phase === 'wagering') {
         if (state.hasWagered) {

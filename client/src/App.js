@@ -1156,17 +1156,17 @@ if (screen === 'player-selection') {
                ))}
              </div>
                <button
-               onClick={startFinalQuestion}
-               disabled={players.filter(p => playerWagers[p.name] !== undefined).length !== players.length}
+  onClick={startFinalQuestion}
+  disabled={players.filter(p => playerWagers[p.name] !== undefined).length !== players.length}
+  className={`px-8 py-4 text-xl font-bold rounded-xl transition-all ${
+    players.filter(p => playerWagers[p.name] !== undefined).length === players.length
+      ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer shadow-lg'
+      : 'bg-gray-500 text-gray-300 cursor-not-allowed opacity-50'
+  }`}
+>
+  Reveal Question →
+</button>
 
-               className={`px-12 py-6 rounded-2xl text-3xl font-black ${
-                 Object.keys(playerWagers).length === players.length
-                   ? 'bg-green-500 hover:bg-green-600 text-white'
-                   : 'bg-gray-500 text-gray-300 cursor-not-allowed'
-               }`}
-             >
-               Reveal Question →
-             </button>
             </div>
          )}
         
@@ -1193,17 +1193,17 @@ if (screen === 'player-selection') {
                 ))}
              </div>
              <button
-               onClick={reviewAnswers}
-                disabled={players.filter(p => playerAnswers[p.name] !== undefined).length !== players.length}
+  onClick={() => setFinalJeopardyPhase('results')}
+  disabled={players.filter(p => playerAnswers[p.name] !== undefined).length !== players.length}
+  className={`px-8 py-4 text-xl font-bold rounded-xl transition-all ${
+    players.filter(p => playerAnswers[p.name] !== undefined).length === players.length
+      ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer shadow-lg'
+      : 'bg-gray-500 text-gray-300 cursor-not-allowed opacity-50'
+  }`}
+>
+  Review Answers →
+</button>
 
-               className={`px-12 py-6 rounded-2xl text-3xl font-black ${
-                 Object.keys(playerAnswers).length === players.length
-                   ? 'bg-green-500 hover:bg-green-600 text-white'
-                   : 'bg-gray-500 text-gray-300 cursor-not-allowed'
-               }`}
-             >
-              Review Answers →
-               </button>
           </div>
          )}
 
