@@ -72,6 +72,7 @@ io.on('connection', (socket) => {
         
         socket.emit('restore-final-jeopardy-state', {
           phase: phase,
+          playerScore: existingPlayer.score,
           hasWagered: rooms[roomCode].playerWagers[playerId] !== undefined,
           hasAnswered: rooms[roomCode].playerAnswers[playerId] !== undefined,
           wager: rooms[roomCode].playerWagers[playerId],
@@ -238,19 +239,55 @@ io.on('connection', (socket) => {
   });
 
   // Final Jeopardy: Start Wagering
-  socket.on('start-final-wagering', (roomCode) => {
-    const room = rooms[roomCode];
-    if (room) {
-      room.finalJeopardyPhase = 'wagering'; // NEW - Track phase
-      room.players.forEach(player => {
-        io.to(player.id).emit('start-final-wagering', { 
-          playerScore: player.score,
-          maxWager: Math.abs(player.score)
-        });
+socket.on('start-final-wagering', (roomCode) => {
+  const room = rooms[roomCode];
+  if (room) {
+    room.finalJeopardyPhase = 'wagering';
+    // NEW - Reset wagers when starting fresh
+    room.playerWagers = {};
+    room.playerAnswers = {};
+    
+    room.players.forEach(player => {
+      io.to(player.id).emit('start-final-wagering', { 
+        playerScore: player.score,
+        maxWager: Math.abs(player.score)
       });
-      console.log(`Final Jeopardy wagering started in room ${roomCode}`);
+    });
+    console.log(`Final Jeopardy wagering started in room ${roomCode}`);
+  }
+});
+
+// Final Jeopardy: Submit Wager - NEW: Use player name as key
+socket.on('submit-wager', ({ roomCode, playerId, wager }) => {
+  if (rooms[roomCode]) {
+    // Find player by socket ID
+    const player = rooms[roomCode].players.find(p => p.id === playerId);
+    if (player) {
+      // Store by NAME instead of ID
+      rooms[roomCode].playerWagers[player.name] = wager;
+      console.log(`Player ${player.name} wagered $${wager}`);
+      
+      // Broadcast to host with player name
+      io.to(roomCode).emit('wager-submitted', { playerId: player.name, wager });
     }
-  });
+  }
+});
+
+// Final Jeopardy: Submit Answer - NEW: Use player name as key  
+socket.on('submit-final-answer', ({ roomCode, playerId, answer }) => {
+  if (rooms[roomCode]) {
+    const player = rooms[roomCode].players.find(p => p.id === playerId);
+    if (player) {
+      // Store by NAME instead of ID
+      rooms[roomCode].playerAnswers[player.name] = answer;
+      console.log(`Player ${player.name} answered: ${answer}`);
+      
+      // Broadcast to host with player name
+      io.to(roomCode).emit('final-answer-submitted', { playerId: player.name, answer });
+    }
+  }
+});
+
 
   // Final Jeopardy: Submit Wager
   socket.on('submit-wager', ({ roomCode, playerId, wager }) => {

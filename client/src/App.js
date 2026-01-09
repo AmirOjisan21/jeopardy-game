@@ -91,14 +91,17 @@ export default function App() {
       setBuzzedPlayerId(null);
     });
     socket.on('wager-submitted', ({ playerId, wager }) => {
-    setPlayerWagers(prev => ({ ...prev, [playerId]: wager }));
-    setPlayersReady(prev => new Set([...prev, playerId]));
-    });
+  // playerId is now player NAME from server
+  setPlayerWagers(prev => ({ ...prev, [playerId]: wager }));
+  setPlayersReady(prev => new Set([...prev, playerId]));
+});
 
-    socket.on('final-answer-submitted', ({ playerId, answer }) => {
-    setPlayerAnswers(prev => ({ ...prev, [playerId]: answer }));
-    setPlayersReady(prev => new Set([...prev, playerId]));
-    });
+socket.on('final-answer-submitted', ({ playerId, answer }) => {
+  // playerId is now player NAME from server
+  setPlayerAnswers(prev => ({ ...prev, [playerId]: answer }));
+  setPlayersReady(prev => new Set([...prev, playerId]));
+});
+
 
     socket.on('active-player-update', (playerId) => {
     setActivePlayerId(playerId);
@@ -1154,7 +1157,8 @@ if (screen === 'player-selection') {
              </div>
                <button
                onClick={startFinalQuestion}
-               disabled={Object.keys(playerWagers).length !== players.length}
+               disabled={players.filter(p => playerWagers[p.name] !== undefined).length !== players.length}
+
                className={`px-12 py-6 rounded-2xl text-3xl font-black ${
                  Object.keys(playerWagers).length === players.length
                    ? 'bg-green-500 hover:bg-green-600 text-white'
@@ -1190,7 +1194,8 @@ if (screen === 'player-selection') {
              </div>
              <button
                onClick={reviewAnswers}
-                disabled={Object.keys(playerAnswers).length !== players.length}
+                disabled={players.filter(p => playerAnswers[p.name] !== undefined).length !== players.length}
+
                className={`px-12 py-6 rounded-2xl text-3xl font-black ${
                  Object.keys(playerAnswers).length === players.length
                    ? 'bg-green-500 hover:bg-green-600 text-white'
@@ -1216,7 +1221,7 @@ if (screen === 'player-selection') {
                      <span className="text-4xl">{player.icon}</span>
                     <div className="text-left">
                         <p className="text-2xl text-white font-bold">{player.name}</p>
-                       <p className="text-xl text-yellow-300">Answer: {playerAnswers[player.id] || '(no answer)'}</p>
+                       <p className="text-xl text-yellow-300">Answer: {playerAnswers[player.name] || '(no answer)'}</p>
                      </div>
                    </div>
                    <button
@@ -1287,7 +1292,7 @@ if (screen === 'player-selection') {
                         </p>
                         {isRevealed && (
                           <p className="text-sm text-gray-600">
-                            Wagered: ${wager} • {wasCorrect ? '✅ Correct' : '❌ Wrong'}
+                            Wagered: ${playerWagers[player.name] || 0} • {wasCorrect ? '✅ Correct' : '❌ Wrong'}
                           </p>
                         )}
                       </div>
