@@ -426,22 +426,23 @@ const reviewAnswers = () => {
   setFinalJeopardyPhase('review');
 };
 
-const toggleCorrectPlayer = (playerId) => {
+const toggleCorrectPlayer = (playerName) => { // Changed parameter name for clarity
   setCorrectPlayers(prev => {
     const newSet = new Set(prev);
-    if (newSet.has(playerId)) {
-      newSet.delete(playerId);
+    if (newSet.has(playerName)) {
+      newSet.delete(playerName);
     } else {
-      newSet.add(playerId);
+      newSet.add(playerName);
     }
     return newSet;
   });
 };
 
+
 const calculateFinalResults = () => {
   const updatedPlayers = players.map(player => {
-    const wager = playerWagers[player.id] || 0;
-    const isCorrect = correctPlayers.has(player.id);
+    const wager = playerWagers[player.name] || 0; // FIXED - use player.name
+    const isCorrect = correctPlayers.has(player.name); // FIXED - use player.name
     const scoreChange = isCorrect ? wager : -wager;
     return { ...player, score: player.score + scoreChange };
   });
@@ -449,10 +450,10 @@ const calculateFinalResults = () => {
   setPlayers(updatedPlayers);
   socket.emit('update-scores', updatedPlayers);
   setFinalJeopardyPhase('results');
-  setRevealedCount(0); 
-  
+  setRevealedCount(0);
   startSequentialReveal(updatedPlayers.length);
 };
+
 
 const playAgain = () => {
   // Reset game state but keep questions
@@ -1225,15 +1226,16 @@ if (screen === 'player-selection') {
                      </div>
                    </div>
                    <button
-                     onClick={() => toggleCorrectPlayer(player.id)}
-                     className={`w-16 h-16 rounded-full text-3xl font-black transition ${
-                       correctPlayers.has(player.id)
-                         ? 'bg-green-500 text-white'
-                         : 'bg-gray-600 text-gray-300'
-                    }`}
-                   >
-                     {correctPlayers.has(player.id) ? '✓' : ''}
-                   </button>
+  onClick={() => toggleCorrectPlayer(player.name)} // FIXED - use player.name
+  className={`w-16 h-16 rounded-full text-3xl font-black transition ${
+    correctPlayers.has(player.name) // FIXED - use player.name
+      ? 'bg-green-500 text-white'
+      : 'bg-gray-600 text-gray-300'
+  }`}
+>
+  {correctPlayers.has(player.name) ? '✓' : '✗'} {/* FIXED */}
+</button>
+
                  </div>
                ))}
               </div>
