@@ -487,7 +487,7 @@ const newGame = () => {
 
 
   const buzzerUrl = window.location.hostname === 'localhost'
-  ? `http://192.168.1.100:8080?room=${roomCode}`
+  ? `http://10.85.138.101:8080?room=${roomCode}`
   : `${window.location.origin}/buzzer?room=${roomCode}`;
 
 
@@ -682,118 +682,176 @@ const newGame = () => {
     );
   }
 
-  // WAITING ROOM
-  if (screen === 'waiting') {
-    return (
-      <div className="min-h-screen relative overflow-hidden" style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)'
-      }}>
-        <div className="absolute inset-0 overflow-hidden opacity-20">
-          <div className="absolute top-10 left-10 w-64 h-64 bg-white rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-10 right-10 w-96 h-96 bg-yellow-300 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+  // WAITING SCREEN
+if (screen === 'waiting') {
+  const canStartGame = players.length >= 2; // NEW - Only need 2 minimum
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-6xl font-black text-yellow-400 mb-4" style={{ textShadow: '0 0 20px rgba(255,215,0,0.5)' }}>
+            Waiting Room
+          </h1>
+          {/* NEW - Prominent player count */}
+          <div className="inline-block bg-white/20 backdrop-blur-sm rounded-2xl px-8 py-4 mb-4">
+            <p className="text-white text-3xl font-bold">
+              {players.length} {players.length === 1 ? 'Player' : 'Players'} Joined
+            </p>
+            <p className="text-white/70 text-sm mt-1">
+              {players.length < 2 ? `Need ${2 - players.length} more to start` : 'Ready to play!'}
+            </p>
+          </div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 inline-block">
+            <p className="text-white text-sm mb-2">Room Code:</p>
+            <p className="text-yellow-400 text-4xl font-black tracking-wider">{roomCode}</p>
+          </div>
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto p-8">
-          <div className="text-center mb-12">
-            <h1 className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 mb-2" 
-                style={{ 
-                  textShadow: '0 0 30px rgba(255, 215, 0, 0.5)',
-                  WebkitTextStroke: '2px rgba(255, 215, 0, 0.3)'
-                }}>
-              JEOPARDY!
-            </h1>
-            <h2 className="text-4xl text-white font-bold mb-2">Waiting Room</h2>
-            <div className="inline-block bg-white/20 backdrop-blur-sm px-6 py-3 rounded-full">
-              <p className="text-2xl text-white font-semibold">
-                {players.length} / 6 players joined
-              </p>
+        {/* QR CODE SECTION */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-3xl p-8 mb-6 shadow-2xl">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Scan to Join</h2>
+            <div className="bg-white p-6 rounded-2xl inline-block shadow-lg mb-4">
+              <QRCode
+                value={
+                  window.location.hostname === 'localhost'
+                    ? `http://10.85.138.101:8080?room=${roomCode}`
+                    : `${window.location.origin}/buzzer?room=${roomCode}`
+                }
+                size={256}
+                level="H"
+              />
             </div>
+            <p className="text-gray-600 text-sm">
+              Or visit: <span className="font-mono font-bold text-purple-600">{buzzerUrl}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* PLAYERS LIST - NEW: Collapsible for large groups */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-3xl p-8 shadow-2xl">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+              <span className="text-4xl">👥</span>
+              Players ({players.length})
+            </h2>
+            {/* NEW - Kick all button (only if 3+ players) */}
+            {players.length > 2 && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Remove all players and start fresh?`)) {
+                    players.forEach(p => {
+                      socket.emit('kick-player', { roomCode, playerId: p.id });
+                    });
+                  }
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
+              >
+                Clear All
+              </button>
+            )}
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-8">
-            <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border-4 border-white/50">
-              <h3 className="text-3xl font-bold text-gray-800 mb-8 text-center flex items-center justify-center gap-3">
-                <span className="text-4xl">👥</span>
-                Players Ready
-              </h3>
-              
-              {players.length === 0 ? (
-                <div className="text-center py-16">
-                  <div className="text-8xl mb-6 animate-bounce">🎮</div>
-                  <p className="text-gray-500 text-xl font-medium">
-                    Waiting for players to join...
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {players.map((player) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center gap-5 bg-gradient-to-r from-purple-50 to-blue-50 p-5 rounded-2xl border-2 border-purple-200 shadow-md"
+          {players.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-6xl mb-4">📱</p>
+              <p className="text-gray-500 text-lg">Waiting for players to join...</p>
+              <p className="text-gray-400 text-sm mt-2">Scan the QR code to join!</p>
+            </div>
+          ) : (
+            <>
+              {/* NEW - Show first 12 players, then collapse */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {players.slice(0, 12).map((player) => (
+                  <div
+                    key={player.id}
+                    className="relative bg-gradient-to-br from-purple-100 to-blue-100 p-6 rounded-2xl shadow-lg transform hover:scale-105 transition-transform"
+                  >
+                    {/* NEW - Kick button */}
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Remove ${player.name} from the game?`)) {
+                          socket.emit('kick-player', { roomCode, playerId: player.id });
+                        }
+                      }}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs hover:bg-red-600 flex items-center justify-center"
+                      title={`Remove ${player.name}`}
                     >
-                      <div className="text-6xl bg-white rounded-full p-3 shadow-md">{player.icon}</div>
-                      <div className="flex-1">
-                        <h4 className="text-2xl font-bold text-gray-800">{player.name}</h4>
-                        <p className="text-sm text-purple-600 font-semibold">Ready to play! 🎯</p>
-                      </div>
-                      <div className="text-green-500 text-4xl animate-pulse">✓</div>
+                      ✕
+                    </button>
+                    <div className="text-center">
+                      <div className="text-5xl mb-3">{player.icon}</div>
+                      <p className="font-bold text-gray-800 text-lg truncate">{player.name}</p>
+                      <p className="text-purple-600 font-semibold text-sm">Ready</p>
                     </div>
-                  ))}
+                  </div>
+                ))}
+              </div>
+
+              {/* NEW - Show "X more players" if more than 12 */}
+              {players.length > 12 && (
+                <div className="mt-4 text-center">
+                  <details className="cursor-pointer">
+                    <summary className="text-purple-600 font-semibold hover:text-purple-700">
+                      + {players.length - 12} more players (click to expand)
+                    </summary>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+                      {players.slice(12).map((player) => (
+                        <div
+                          key={player.id}
+                          className="relative bg-gradient-to-br from-purple-100 to-blue-100 p-6 rounded-2xl shadow-lg"
+                        >
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Remove ${player.name} from the game?`)) {
+                                socket.emit('kick-player', { roomCode, playerId: player.id });
+                              }
+                            }}
+                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs hover:bg-red-600 flex items-center justify-center"
+                            title={`Remove ${player.name}`}
+                          >
+                            ✕
+                          </button>
+                          <div className="text-center">
+                            <div className="text-5xl mb-3">{player.icon}</div>
+                            <p className="font-bold text-gray-800 text-lg truncate">{player.name}</p>
+                            <p className="text-purple-600 font-semibold text-sm">Ready</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 </div>
               )}
-            </div>
+            </>
+          )}
 
-            <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border-4 border-white/50">
-              <h3 className="text-3xl font-bold text-gray-800 mb-8 text-center flex items-center justify-center gap-3">
-                <span className="text-4xl">📱</span>
-                Join the Game
-              </h3>
-              
-              <div className="text-center">
-                <p className="text-xl text-gray-700 mb-6 font-medium">
-                  Scan this QR code with your phone:
-                </p>
-                
-                <div className="bg-gradient-to-br from-purple-100 to-blue-100 w-72 h-72 mx-auto rounded-3xl flex items-center justify-center mb-8 border-4 border-purple-300 shadow-xl">
-                    <QRCode
-  value={
-    window.location.hostname === 'localhost'
-      ? `http://192.168.1.100:8080?room=${roomCode}`
-      : `${window.location.origin}/buzzer?room=${roomCode}`
-  }
-  size={256}
-  level="H"
-/>
-
-                </div>
-
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-5 rounded-2xl mb-6 border-2 border-blue-200">
-                  <p className="text-sm text-gray-600 mb-2 font-semibold">Or visit on your phone:</p>
-                  <code className="text-blue-600 font-mono text-lg break-all font-bold">
-                    {buzzerUrl}
-                  </code>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="text-center mt-10">
+          {/* START GAME BUTTON */}
+          <div className="mt-8 text-center">
+            {!canStartGame && (
+              <p className="text-orange-600 font-semibold mb-4 text-lg">
+                ⚠️ Need at least 2 players to start
+              </p>
+            )}
             <button
-            onClick={startPlayerSelection}
-            disabled={players.length < 2}
-            className={`px-16 py-5 text-3xl font-black rounded-2xl shadow-2xl transition-all transform ${
-              players.length >= 2
-                ? 'bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700 text-white cursor-pointer hover:scale-105'
-                : 'bg-gray-400 text-gray-200 cursor-not-allowed'
-            }`}
-          >
-            {players.length < 2 ? '⏳ Need 2+ Players' : '🚀 START GAME'}
-          </button>
+              onClick={startPlayerSelection}
+              disabled={!canStartGame}
+              className={`px-12 py-4 text-2xl font-black rounded-2xl shadow-2xl transform transition-all ${
+                canStartGame
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:scale-105 hover:shadow-green-500/50'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              🎮 START GAME
+            </button>
           </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
 
   // PLAYER SELECTION SCREEN
 if (screen === 'player-selection') {
@@ -833,7 +891,7 @@ if (screen === 'player-selection') {
 
   // GAME BOARD
   return (
-     <>
+    <>
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: scale(0.9); }
@@ -843,202 +901,159 @@ if (screen === 'player-selection') {
           animation: fadeIn 0.8s ease-out;
         }
         @keyframes slideIn {
-          from { 
-            opacity: 0; 
-            transform: translateX(-100px);
-          }
-          to { 
-            opacity: 1; 
-            transform: translateX(0);
-          }
+          from { opacity: 0; transform: translateX(-100px); }
+          to { opacity: 1; transform: translateX(0); }
         }
       `}</style>
-    <div className="min-h-screen relative overflow-hidden" style={{
-      background: 'linear-gradient(135deg, #1e3a8a 0%, #3b0764 50%, #1e293b 100%)'
-    }}>
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-full h-full" style={{
-          backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)',
-          backgroundSize: '50px 50px'
-        }}></div>
-      </div>
 
-      {/* Meme Video Overlay - HIGHEST Z-INDEX */}
-      {playingVideo && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90">
-          {playingVideo.url.endsWith('.mp4') || playingVideo.url.endsWith('.webm') ? (
-            <video
-              src={playingVideo.url}
-              autoPlay
-              className="max-w-4xl max-h-screen rounded-2xl shadow-2xl"
-              onEnded={() => setPlayingVideo(null)}
-              onError={(e) => console.error('Video failed to load:', e)}
-            />
-          ) : (
-            <img
-              src={playingVideo.url}
-              alt="Reaction"
-              className="max-w-4xl max-h-screen rounded-2xl shadow-2xl"
-            />
-          )}
+      <div className="min-h-screen relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b0764 50%, #1e293b 100%)' }}>
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-0 w-full h-full" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '50px 50px' }}></div>
         </div>
-      )}
 
-      {/* Question Modal */}
-      {currentQuestion && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-gradient-to-br from-blue-600 to-purple-700 rounded-3xl max-w-5xl w-full p-8 md:p-12 shadow-2xl border-4 border-yellow-400 relative my-8">
-            <button
-              onClick={closeQuestion}
-              className="absolute top-4 right-4 md:top-6 md:right-6 text-white text-4xl md:text-5xl hover:text-red-400 transition z-10 bg-black/30 rounded-full w-12 h-12 md:w-16 md:h-16 flex items-center justify-center"
-            >
-              ✕
-            </button>
-
-            <div className="text-center mb-6 md:mb-8">
-              <p className="text-yellow-300 text-xl md:text-2xl font-bold mb-2">{currentQuestion.category}</p>
-              <p className="text-white text-4xl md:text-6xl font-black">{currentQuestion.points} POINTS</p>
-            </div>
-
-            {/* Hide question when video is playing for wrong answers, show answer with video for correct */}
-            {!playingVideo && !answeredCorrectly && !showAnswer && (
-              <div className="bg-white/95 backdrop-blur rounded-2xl p-6 md:p-10 mb-6 md:mb-8">
-                {currentQuestion.imageUrl && (
-                  <img 
-                    src={currentQuestion.imageUrl} 
-                    alt="Question" 
-                    className="w-full max-h-96 object-contain rounded-lg mb-4 md:mb-6"
-                  />
-                )}
-                {currentQuestion.question && (
-                  <p className="text-2xl md:text-4xl font-bold text-gray-800 text-center leading-relaxed">
-                    {currentQuestion.question}
-                  </p>
-                )}
-              </div>
+        {/* Meme Video Overlay - HIGHEST Z-INDEX */}
+        {playingVideo && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90">
+            {playingVideo.url.endsWith('.mp4') || playingVideo.url.endsWith('.webm') ? (
+              <video src={playingVideo.url} autoPlay className="max-w-4xl max-h-screen rounded-2xl shadow-2xl" onEnded={() => setPlayingVideo(null)} onError={(e) => console.error('Video failed to load', e)} />
+            ) : (
+              <img src={playingVideo.url} alt="Reaction" className="max-w-4xl max-h-screen rounded-2xl shadow-2xl" />
             )}
-
-            {showAnswer && !playingVideo && (
-              <div className="bg-green-500/20 backdrop-blur rounded-2xl p-6 md:p-8 mb-6 md:mb-8 border-4 border-green-400">
-                <p className="text-2xl md:text-3xl font-bold text-green-100 text-center">
-                  Answer: {currentQuestion.answer}
-                </p>
-              </div>
-            )}
-
-            {buzzedPlayerId && !answeredCorrectly && !playingVideo && (
-              <div className="bg-yellow-400/20 backdrop-blur rounded-2xl p-4 md:p-6 mb-6 md:mb-8 border-4 border-yellow-400 animate-pulse">
-                {players.filter(p => p.id === buzzedPlayerId).map(player => (
-                  <div key={player.id} className="flex items-center justify-center gap-3 md:gap-4">
-                    <span className="text-4xl md:text-6xl">{player.icon}</span>
-                    <span className="text-2xl md:text-4xl font-black text-white">{player.name} BUZZED IN!</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-3 md:gap-4 justify-center flex-wrap">
-              <button
-                onClick={handleCorrect}
-                disabled={!buzzedPlayerId || answeredCorrectly}
-                className={`px-6 md:px-8 py-4 md:py-5 rounded-2xl text-xl md:text-2xl font-black transition-all transform ${
-                  buzzedPlayerId && !answeredCorrectly
-                    ? 'bg-green-500 hover:bg-green-600 text-white hover:scale-105 cursor-pointer'
-                    : 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                }`}
-              >
-                ✅ Correct
-              </button>
-
-              <button
-                onClick={handleWrong}
-                disabled={!buzzedPlayerId || answeredCorrectly}
-                className={`px-6 md:px-8 py-4 md:py-5 rounded-2xl text-xl md:text-2xl font-black transition-all transform ${
-                  buzzedPlayerId && !answeredCorrectly
-                    ? 'bg-red-500 hover:bg-red-600 text-white hover:scale-105 cursor-pointer'
-                    : 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                }`}
-              >
-                ❌ Wrong
-              </button>
-
-              <button
-                onClick={toggleShowAnswer}
-                disabled={answeredCorrectly}
-                className={`px-6 md:px-8 py-4 md:py-5 rounded-2xl text-xl md:text-2xl font-black transition-all transform ${
-                  answeredCorrectly
-                    ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                    : 'bg-blue-500 hover:bg-blue-600 text-white hover:scale-105'
-                }`}
-              >
-                👁️ {showAnswer ? 'Hide' : 'Show'} Answer
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="relative z-10 p-6">
-        <div className="text-center mb-8">
-          <h1 className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 mb-3" 
-              style={{ 
-                textShadow: '0 0 40px rgba(255, 215, 0, 0.6)',
-                WebkitTextStroke: '3px rgba(255, 215, 0, 0.3)'
-              }}>
-            JEOPARDY!
-          </h1>
-          <div className="inline-block bg-white/10 backdrop-blur-sm px-8 py-3 rounded-full border-2 border-yellow-400/30">
-            <p className="text-white text-2xl font-bold">
-              {buzzedPlayerId ? '⚡ Someone buzzed in!' : '⏳ Waiting for buzz...'}
-            </p>
-          </div>
-        </div>
+        {/* Question Modal */}
+        {currentQuestion && (
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-gradient-to-br from-blue-600 to-purple-700 rounded-3xl max-w-5xl w-full p-8 md:p-12 shadow-2xl border-4 border-yellow-400 relative my-8">
+              <button onClick={closeQuestion} className="absolute top-4 right-4 md:top-6 md:right-6 text-white text-4xl md:text-5xl hover:text-red-400 transition z-10 bg-black/30 rounded-full w-12 h-12 md:w-16 md:h-16 flex items-center justify-center">✕</button>
+              
+              <div className="text-center mb-6 md:mb-8">
+                <p className="text-yellow-300 text-xl md:text-2xl font-bold mb-2">{currentQuestion.category}</p>
+                <p className="text-white text-4xl md:text-6xl font-black">${currentQuestion.points} POINTS</p>
+              </div>
 
-                {!finalJeopardyPhase && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-7xl mx-auto mb-8">
-              {players.map((player) => {
-              const isBuzzed = player.id === buzzedPlayerId;
-              const isDimmed = buzzedPlayerId && player.id !== buzzedPlayerId;
-              const isLocked = lockedPlayers.has(player.id);
-              const isActive = player.id === activePlayerId;
-      
-             return (
-             <div
-              key={player.id}
-             className={`bg-gradient-to-br from-white to-gray-50 rounded-2xl p-5 transition-all duration-300 border-4 ${
-             isBuzzed 
-                ? 'ring-8 ring-yellow-400 shadow-2xl shadow-yellow-500/50 scale-110 border-yellow-400' 
-               : isDimmed 
-                ? 'opacity-20 scale-90 border-gray-300' 
-                : isLocked
-               ? 'opacity-50 border-red-400'
-               : isActive && !currentQuestion
-                ? 'ring-8 ring-green-400 shadow-2xl shadow-green-500/50 border-green-400 animate-pulse'
-               : 'shadow-xl border-purple-300 hover:scale-105'
-                  }`}
-                  >
-              <div className="text-center">
-                <div className={`text-6xl mb-2 ${isBuzzed ? 'animate-bounce' : ''}`}>
-                {player.icon}
-               </div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2 truncate">
-                 {player.name}
-               </h3>
-               <div className={`text-3xl font-black ${isBuzzed ? 'text-yellow-500' : 'text-blue-600'}`}>
-               {player.score} pts
-             </div>
-             {isActive && !currentQuestion && (
-               <div className="text-2xl mt-2">👈</div>
+              {/* Hide question when video is playing for wrong answers, show answer with video for correct */}
+              {(!playingVideo || !answeredCorrectly) && !showAnswer && (
+                <div className="bg-white/95 backdrop-blur rounded-2xl p-6 md:p-10 mb-6 md:mb-8">
+                  {currentQuestion.imageUrl && (
+                    <img src={currentQuestion.imageUrl} alt="Question" className="w-full max-h-96 object-contain rounded-lg mb-4 md:mb-6" />
+                  )}
+                  {currentQuestion.question && (
+                    <p className="text-2xl md:text-4xl font-bold text-gray-800 text-center leading-relaxed">{currentQuestion.question}</p>
+                  )}
+                </div>
               )}
+
+              {showAnswer && !playingVideo && (
+                <div className="bg-green-500/20 backdrop-blur rounded-2xl p-6 md:p-8 mb-6 md:mb-8 border-4 border-green-400">
+                  <p className="text-2xl md:text-3xl font-bold text-green-100 text-center">Answer: {currentQuestion.answer}</p>
+                </div>
+              )}
+
+              {buzzedPlayerId && !answeredCorrectly && !playingVideo && (
+                <div className="bg-yellow-400/20 backdrop-blur rounded-2xl p-4 md:p-6 mb-6 md:mb-8 border-4 border-yellow-400 animate-pulse">
+                  {players.filter(p => p.id === buzzedPlayerId).map(player => (
+                    <div key={player.id} className="flex items-center justify-center gap-3 md:gap-4">
+                      <span className="text-4xl md:text-6xl">{player.icon}</span>
+                      <span className="text-2xl md:text-4xl font-black text-white">{player.name} BUZZED IN!</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-3 md:gap-4 justify-center flex-wrap">
+                <button onClick={handleCorrect} disabled={!buzzedPlayerId || answeredCorrectly} className={`px-6 md:px-8 py-4 md:py-5 rounded-2xl text-xl md:text-2xl font-black transition-all transform ${buzzedPlayerId && !answeredCorrectly ? 'bg-green-500 hover:bg-green-600 text-white hover:scale-105 cursor-pointer' : 'bg-gray-500 text-gray-300 cursor-not-allowed'}`}>✓ Correct</button>
+                <button onClick={handleWrong} disabled={!buzzedPlayerId || answeredCorrectly} className={`px-6 md:px-8 py-4 md:py-5 rounded-2xl text-xl md:text-2xl font-black transition-all transform ${buzzedPlayerId && !answeredCorrectly ? 'bg-red-500 hover:bg-red-600 text-white hover:scale-105 cursor-pointer' : 'bg-gray-500 text-gray-300 cursor-not-allowed'}`}>✗ Wrong</button>
+                <button onClick={toggleShowAnswer} disabled={answeredCorrectly} className={`px-6 md:px-8 py-4 md:py-5 rounded-2xl text-xl md:text-2xl font-black transition-all transform ${answeredCorrectly ? 'bg-gray-500 text-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 text-white hover:scale-105'}`}>{showAnswer ? 'Hide' : 'Show'} Answer</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="relative z-10 p-6">
+          <div className="text-center mb-8">
+            <h1 className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 mb-3" style={{ textShadow: '0 0 40px rgba(255, 215, 0, 0.6)', WebkitTextStroke: '3px rgba(255, 215, 0, 0.3)' }}>JEOPARDY!</h1>
+            <div className="inline-block bg-white/10 backdrop-blur-sm px-8 py-3 rounded-full border-2 border-yellow-400/30">
+              <p className="text-white text-2xl font-bold">{buzzedPlayerId ? '🔴 Someone buzzed in!' : '⏳ Waiting for buzz...'}</p>
+            </div>
+          </div>
+
+{/* SCOREBOARD - Updated for large groups */}
+<div className="max-w-7xl mx-auto mb-8">
+  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-xl border-2 border-white/20">
+    <h2 className="text-2xl font-bold text-white mb-4 text-center">
+      📊 Scoreboard ({players.length} players)
+    </h2>
+    
+    {players.length <= 6 ? (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {players.map((player) => {
+          const isBuzzed = player.id === buzzedPlayerId;
+          const isDimmed = buzzedPlayerId && player.id !== buzzedPlayerId;
+          const isLocked = lockedPlayers.has(player.id);
+          const isActive = player.id === activePlayerId;
+          
+          return (
+            <div key={player.id} className={`bg-gradient-to-br from-white to-gray-50 rounded-2xl p-4 transition-all duration-300 border-4 ${isBuzzed ? 'ring-8 ring-yellow-400 shadow-2xl shadow-yellow-500/50 scale-110 border-yellow-400' : isDimmed ? 'opacity-20 scale-90 border-gray-300' : isLocked ? 'opacity-50 border-red-400' : isActive && !currentQuestion ? 'ring-8 ring-green-400 shadow-2xl shadow-green-500/50 border-green-400 animate-pulse' : 'shadow-xl border-purple-300'}`}>
+              <div className="text-center">
+                <div className={`text-5xl mb-2 ${isBuzzed ? 'animate-bounce' : ''}`}>{player.icon}</div>
+                <h3 className="text-lg font-bold text-gray-800 mb-1 truncate">{player.name}</h3>
+                <div className={`text-2xl font-black ${isBuzzed ? 'text-yellow-500' : 'text-blue-600'}`}>{player.score}</div>
+                {isActive && !currentQuestion && <div className="text-xl mt-1">👑</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          {players.sort((a, b) => b.score - a.score).slice(0, 8).map((player, index) => {
+            const isBuzzed = player.id === buzzedPlayerId;
+            const isActive = player.id === activePlayerId;
+            
+            return (
+              <div key={player.id} className={`flex items-center gap-2 p-3 rounded-xl transition-all ${isBuzzed ? 'bg-yellow-400 scale-105 ring-4 ring-yellow-300' : isActive && !currentQuestion ? 'bg-green-400 ring-4 ring-green-300' : 'bg-white/90'}`}>
+                <span className="text-sm font-bold text-gray-500">#{index + 1}</span>
+                <span className="text-3xl">{player.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm truncate">{player.name}</p>
+                  <p className={`text-lg font-black ${player.score >= 0 ? 'text-green-600' : 'text-red-600'}`}>${player.score}</p>
                 </div>
               </div>
-               );
-              })}
+            );
+          })}
+        </div>
+
+        {players.length > 8 && (
+          <details className="mt-3">
+            <summary className="cursor-pointer text-yellow-300 font-semibold hover:text-yellow-200 text-center bg-white/10 rounded-lg py-2">
+              + {players.length - 8} more players (click to expand)
+            </summary>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+              {players.sort((a, b) => b.score - a.score).slice(8).map((player, index) => (
+                <div key={player.id} className="flex items-center gap-2 p-3 rounded-xl bg-white/90">
+                  <span className="text-sm font-bold text-gray-500">#{index + 9}</span>
+                  <span className="text-3xl">{player.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate">{player.name}</p>
+                    <p className={`text-lg font-black ${player.score >= 0 ? 'text-green-600' : 'text-red-600'}`}>${player.score}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            )}
+          </details>
+        )}
+      </>
+    )}
+  </div>
+</div>
 
 
-        <div className="max-w-7xl mx-auto mb-8">
+          {/* GAME BOARD */}
+          <div className="max-w-7xl mx-auto mb-8">
+
            {!finalJeopardyPhase ? (
          // Regular Jeopardy Board
           <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 rounded-3xl p-6 shadow-2xl border-4 border-blue-700">
@@ -1219,105 +1234,106 @@ if (screen === 'player-selection') {
              </button>
            </div>
          )}
-         {finalJeopardyPhase === 'results' && (
-          <div>
-            <h2 className="text-5xl font-black text-white mb-12">
-              🏆 FINAL RESULTS 🏆
-            </h2>
+{/* FINAL JEOPARDY RESULTS - Updated */}
+{finalJeopardyPhase === 'results' && (
+  <div className="min-h-screen bg-gradient-to-br from-yellow-900 via-orange-900 to-red-900 p-8">
+    <div className="max-w-6xl mx-auto">
+      <div className="text-center mb-8">
+        <h1 className="text-7xl font-black text-yellow-300 mb-4 animate-bounce">
+          🏆 FINAL RESULTS 🏆
+        </h1>
+      </div>
 
-            <div className="space-y-6 max-w-4xl mx-auto">
-              {[...players]
-                .sort((a, b) => a.score - b.score) // Sort lowest to highest
-                .map((player, index) => {
-                  const rank = players.length - index;
-                  const isRevealed = index < revealedCount;
-                  const isWinner = rank === 1;
-                  const wager = playerWagers[player.id] || 0;
-                  const wasCorrect = correctPlayers.has(player.id);
-                  
-                  if (!isRevealed) {
-                    return (
-                      <div key={player.id} className="bg-white/5 rounded-2xl p-8 animate-pulse">
-                  <p className="text-2xl text-white/50 text-center">???</p>
-            </div>
-             );
-                  }
-                  
-                  return (
-                    <div
-                      key={player.id}
-                      className={`rounded-2xl p-8 transition-all duration-500 transform ${
-                        isWinner
-                          ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 scale-110 ring-8 ring-yellow-300 animate-pulse'
-                          : 'bg-gradient-to-r from-blue-600 to-purple-600'
-                      }`}
-                      style={{
-                        animation: isRevealed ? 'slideIn 0.5s ease-out' : 'none'
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-6">
-                          <div className={`text-6xl font-black ${isWinner ? 'text-gray-900' : 'text-yellow-300'}`}>
-                            #{rank}
-                          </div>
-                          <div className="text-7xl">{player.icon}</div>
-                          <div>
-                            <h3 className={`text-3xl font-bold ${isWinner ? 'text-gray-900' : 'text-white'}`}>
-                              {player.name}
-                            </h3>
-                            <p className={`text-xl mt-1 ${isWinner ? 'text-gray-700' : 'text-white/80'}`}>
-                              Wagered: {wager} • {wasCorrect ? '✅ Correct' : '❌ Wrong'}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="text-right">
-                          <div className={`text-5xl font-black ${isWinner ? 'text-gray-900' : 'text-yellow-300'}`}>
-                            {player.score}
-                          </div>
-                          {isWinner && (
-                            <div className="text-4xl mt-2 animate-bounce">👑</div>
-                          )}
-                        </div>
+      {/* Show players one by one (bottom to top) */}
+      <div className="space-y-4">
+        {players
+          .sort((a, b) => a.score - b.score)
+          .map((player, index) => {
+            const isRevealed = index < revealedCount;
+            const isWinner = index === players.length - 1 && isRevealed;
+            const wager = playerWagers[player.id] || 0;
+            const wasCorrect = correctPlayers.has(player.id);
+
+            return (
+              <div
+                key={player.id}
+                className={`transform transition-all duration-500 ${
+                  isRevealed ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+                }`}
+              >
+                <div
+                  className={`p-6 rounded-3xl shadow-2xl ${
+                    isWinner
+                      ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 animate-pulse'
+                      : 'bg-white/90 backdrop-blur-sm'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <span className={`text-4xl font-black ${isWinner ? 'text-6xl' : 'text-3xl text-gray-400'}`}>
+                        #{players.length - index}
+                      </span>
+                      <span className="text-6xl">{player.icon}</span>
+                      <div>
+                        <p className={`font-black ${isWinner ? 'text-4xl text-white' : 'text-2xl text-gray-800'}`}>
+                          {player.name}
+                        </p>
+                        {isRevealed && (
+                          <p className="text-sm text-gray-600">
+                            Wagered: ${wager} • {wasCorrect ? '✅ Correct' : '❌ Wrong'}
+                          </p>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-            </div>
-            
-            {revealedCount >= players.length && (
-              <div className="mt-12 animate-fade-in">
-                <div className="text-center mb-8">
-                  <div className="text-8xl mb-4">🎉🎊🎉</div>
-                  <h2 className="text-6xl font-black text-yellow-400 mb-2">
-                    CONGRATULATIONS!
-                  </h2>
-                  <p className="text-3xl text-white">
-                    {players.sort((a, b) => b.score - a.score)[0].name} WINS!
-                  </p>
+                    {isRevealed && (
+                      <div className="text-right">
+                        <p className={`font-black ${isWinner ? 'text-5xl text-white' : 'text-3xl'} ${
+                          player.score >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          ${player.score}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                
-                <div className="flex gap-6 justify-center">
-                   <button
-                  onClick={playAgain}
-                   className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white px-12 py-6 rounded-2xl text-2xl font-black shadow-2xl transition-all transform hover:scale-105"
-                     >
-                 🔄 Play Again<br/>
-                 <span className="text-sm font-normal">(Same Questions)</span>
-               </button>
-      
-                 <button
-                  onClick={newGame}
-                 className="bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700 text-white px-12 py-6 rounded-2xl text-2xl font-black shadow-2xl transition-all transform hover:scale-105"
-                >
-                🎮 New Game<br/>
-               <span className="text-sm font-normal">(New Questions)</span>
-               </button>
               </div>
-              </div>
-            )}
+            );
+          })}
+      </div>
+
+      {/* Show winner celebration after all revealed */}
+      {revealedCount >= players.length && (
+        <div className="mt-12 animate-fade-in">
+          <div className="text-center mb-8">
+            <h2 className="text-6xl font-black text-yellow-300 mb-4">
+              🎉 CONGRATULATIONS! 🎉
+            </h2>
+            <p className="text-white text-2xl">
+              {players.sort((a, b) => b.score - a.score)[0]?.name} wins with $
+              {players.sort((a, b) => b.score - a.score)[0]?.score}!
+            </p>
           </div>
-        )}
+
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={playAgain}
+              className="px-8 py-4 bg-green-500 text-white text-xl font-bold rounded-2xl hover:bg-green-600 shadow-2xl"
+            >
+              🔄 Play Again (Same Questions)
+            </button>
+            <button
+              onClick={newGame}
+              className="px-8 py-4 bg-blue-500 text-white text-xl font-bold rounded-2xl hover:bg-blue-600 shadow-2xl"
+            >
+              🆕 New Game (New Questions)
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
        </div>
         </div>
         )}

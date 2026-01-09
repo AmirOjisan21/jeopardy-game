@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MIG Buzzer</title>
+  <title>Jeopardy Buzzer</title>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <style>
     * {
@@ -20,12 +20,12 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 15px;
     }
     
     .container {
       text-align: center;
-      max-width: 400px;
+      max-width: 450px;
       width: 100%;
     }
     
@@ -39,26 +39,26 @@
     
     h1 {
       color: white;
-      font-size: 2.5rem;
-      margin-bottom: 30px;
+      font-size: 2rem;
+      margin-bottom: 20px;
       text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
     }
     
     .registration {
       background: white;
-      padding: 30px;
+      padding: 20px;
       border-radius: 20px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
     
     .registration h2 {
       color: #333;
-      font-size: 1.8rem;
-      margin-bottom: 20px;
+      font-size: 1.5rem;
+      margin-bottom: 15px;
     }
     
     .form-group {
-      margin-bottom: 20px;
+      margin-bottom: 15px;
       text-align: left;
     }
     
@@ -67,12 +67,13 @@
       font-weight: bold;
       margin-bottom: 8px;
       color: #555;
+      font-size: 0.95rem;
     }
     
     .form-group input {
       width: 100%;
       padding: 12px;
-      font-size: 1.1rem;
+      font-size: 1rem;
       border: 2px solid #ddd;
       border-radius: 8px;
       transition: border 0.3s;
@@ -86,41 +87,45 @@
     .icon-selector {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      gap: 8px;
       margin-top: 10px;
     }
     
     .icon-option {
-      font-size: 3rem;
-      padding: 15px;
+      font-size: 2.5rem;
+      padding: 10px;
       border: 3px solid #ddd;
       border-radius: 10px;
       cursor: pointer;
       transition: all 0.2s;
       background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 1;
     }
     
     .icon-option:hover {
-      transform: scale(1.1);
+      transform: scale(1.05);
     }
     
     .icon-option.selected {
       border-color: #667eea;
       background: #f0f0ff;
-      transform: scale(1.1);
+      transform: scale(1.05);
     }
     
     .join-btn {
       width: 100%;
       padding: 15px;
-      font-size: 1.3rem;
+      font-size: 1.2rem;
       font-weight: bold;
       color: white;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       border: none;
       border-radius: 10px;
       cursor: pointer;
-      margin-top: 20px;
+      margin-top: 15px;
       transition: transform 0.2s;
     }
     
@@ -135,13 +140,13 @@
     }
     
     #buzzer-btn {
-      width: 250px;
-      height: 250px;
+      width: 200px;
+      height: 200px;
       border-radius: 50%;
       border: none;
       background: linear-gradient(145deg, #ff6b6b, #ee5a52);
       color: white;
-      font-size: 2rem;
+      font-size: 1.8rem;
       font-weight: bold;
       cursor: pointer;
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
@@ -173,7 +178,7 @@
     
     #status {
       color: white;
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       margin-top: 20px;
       padding: 15px;
       background: rgba(255,255,255,0.2);
@@ -188,29 +193,41 @@
     }
     
     .player-icon {
-      font-size: 4rem;
+      font-size: 3.5rem;
       margin-bottom: 10px;
     }
     
     .player-name {
-      font-size: 1.5rem;
+      font-size: 1.3rem;
       font-weight: bold;
       color: #333;
     }
 
+    /* NEW - Reconnecting indicator */
+    .reconnecting {
+      background: rgba(255, 193, 7, 0.3);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.6; }
+    }
+
     @media (max-width: 400px) {
-    h1 {
-      font-size: 1.8rem;
+      h1 {
+        font-size: 1.8rem;
+      }
+      
+      .icon-option {
+        font-size: 2rem;
+        padding: 8px;
+      }
+      
+      .registration {
+        padding: 15px;
+      }
     }
-    
-    .icon-option {
-      font-size: 2rem;
-      padding: 8px;
-    }
-    
-    .registration {
-      padding: 15px;
-    }}
   </style>
 </head>
 <body>
@@ -270,14 +287,17 @@
     
     let selectedIcon = null;
     let playerName = '';
-    let finalJeopardyMode = null; // NEW
-    let currentScore = 0; // NEW
+    let finalJeopardyMode = null;
+    let currentScore = 0;
     let isLockedOut = false;
+    let hasJoinedGame = false; // NEW - Track if player has joined
     
     // Get room code from URL
     const urlParams = new URLSearchParams(window.location.search);
     const roomCode = urlParams.get('room') || 'DEFAULT';
 
+    // NEW - Try to load saved player data
+    const savedPlayerData = localStorage.getItem(`jeopardy_player_${roomCode}`);
     
     iconSelector.addEventListener('click', (e) => {
       if (e.target.classList.contains('icon-option')) {
@@ -306,15 +326,27 @@
     
     joinBtn.addEventListener('click', () => {
       if (playerName && selectedIcon) {
+        // NEW - Save player data to localStorage
+        localStorage.setItem(`jeopardy_player_${roomCode}`, JSON.stringify({
+          name: playerName,
+          icon: selectedIcon
+        }));
         joinGame(playerName, selectedIcon);
       }
     });
     
     const socket = io(
-  window.location.hostname === 'localhost'
-    ? 'http://10.163.48.101:3001'
-    : window.location.origin
-);
+      window.location.hostname === 'localhost'
+        ? 'http://10.85.138.101:3001'
+        : window.location.origin,
+      {
+        // NEW - Better reconnection settings
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: Infinity
+      }
+    );
 
     const buzzerBtn = document.getElementById('buzzer-btn');
     const status = document.getElementById('status');
@@ -327,43 +359,74 @@
       
       playerIconDisplay.textContent = icon;
       playerNameDisplay.textContent = name;
+      playerName = name;
+      selectedIcon = icon;
       
       socket.emit('join-game', { name, icon, roomCode });
       status.textContent = 'Connected! Ready to buzz!';
       buzzerBtn.disabled = false;
+      hasJoinedGame = true;
+    }
+
+    // NEW - Auto-rejoin on page load if player data exists
+    if (savedPlayerData) {
+      try {
+        const data = JSON.parse(savedPlayerData);
+        // Auto-fill form
+        nameInput.value = data.name;
+        playerName = data.name;
+        selectedIcon = data.icon;
+        
+        // Pre-select icon
+        document.querySelectorAll('.icon-option').forEach(opt => {
+          if (opt.dataset.icon === data.icon) {
+            opt.classList.add('selected');
+          }
+        });
+        
+        checkFormValid();
+        
+        // Try to rejoin automatically after 1 second
+        setTimeout(() => {
+          if (!hasJoinedGame) {
+            joinGame(data.name, data.icon);
+          }
+        }, 1000);
+      } catch (e) {
+        console.log('Failed to parse saved player data');
+      }
     }
 
     // NEW FUNCTIONS - Final Jeopardy screens
     function showWageringScreen() {
-  document.querySelector('.container').innerHTML = `
-    <h1>🏆 FINAL JEOPARDY</h1>
-    <div class="registration">
-      <h2>Place Your Wager</h2>
-      <div class="player-info" style="margin-bottom: 20px;">
-        <div style="font-size: 3rem;">${selectedIcon}</div>
-        <div style="font-size: 1.3rem; font-weight: bold;">${playerName}</div>
-        <div style="font-size: 1.5rem; color: ${currentScore >= 0 ? '#667eea' : '#ef4444'}; margin-top: 10px;">Score: ${currentScore}</div>
-      </div>
-      
-      <div class="form-group">
-        <label for="wager-input">Enter Your Wager:</label>
-        <input 
-          type="number" 
-          id="wager-input" 
-          placeholder="0"
-          min="0"
-          max="${maxWager}"
-          style="text-align: center; font-size: 1.5rem; font-weight: bold;"
-        >
-        <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">Maximum: ${maxWager}</p>
-        ${currentScore < 0 ? '<p style="font-size: 0.85rem; color: #ef4444; margin-top: 5px;">⚠️ Negative score: Wager up to the positive value</p>' : ''}
-      </div>
-      
-      <button onclick="submitWager()" class="join-btn">Submit Wager</button>
-    </div>
-  `;
-}
-
+      document.querySelector('.container').innerHTML = `
+        <h1>🏆 FINAL JEOPARDY</h1>
+        <div class="registration">
+          <h2>Place Your Wager</h2>
+          <div class="player-info" style="margin-bottom: 20px;">
+            <div style="font-size: 3rem;">${selectedIcon}</div>
+            <div style="font-size: 1.3rem; font-weight: bold;">${playerName}</div>
+            <div style="font-size: 1.5rem; color: ${currentScore >= 0 ? '#667eea' : '#ef4444'}; margin-top: 10px;">Score: $${currentScore}</div>
+          </div>
+          
+          <div class="form-group">
+            <label for="wager-input">Enter Your Wager:</label>
+            <input 
+              type="number" 
+              id="wager-input" 
+              placeholder="0"
+              min="0"
+              max="${maxWager}"
+              style="text-align: center; font-size: 1.5rem; font-weight: bold;"
+            >
+            <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">Maximum: $${maxWager}</p>
+            ${currentScore < 0 ? '<p style="font-size: 0.85rem; color: #ef4444; margin-top: 5px;">⚠️ Negative score: Wager up to the positive value</p>' : ''}
+          </div>
+          
+          <button onclick="submitWager()" class="join-btn">Submit Wager</button>
+        </div>
+      `;
+    }
 
     function showAnsweringScreen() {
       document.querySelector('.container').innerHTML = `
@@ -399,9 +462,9 @@
         return;
       }
       if (wager > maxWager) {
-    alert(`You can't wager more than ${maxWager}!`);
-    return;
-    }
+        alert(`You can't wager more than $${maxWager}!`);
+        return;
+      }
       
       socket.emit('submit-wager', {
         roomCode: roomCode,
@@ -415,7 +478,7 @@
           <div style="text-align: center; padding: 40px;">
             <div style="font-size: 5rem; margin-bottom: 20px;">✅</div>
             <h2 style="color: #10b981; margin-bottom: 10px;">Wager Submitted!</h2>
-            <p style="font-size: 2rem; color: #667eea; font-weight: bold;">${wager}</p>
+            <p style="font-size: 2rem; color: #667eea; font-weight: bold;">$${wager}</p>
             <p style="color: #666; margin-top: 30px; font-size: 1.1rem;">Waiting for other players...</p>
           </div>
         </div>
@@ -452,20 +515,50 @@
     
     // Socket event listeners
     socket.on('connect', () => {
-      if (buzzerScreen.classList.contains('active')) {
+      console.log('Connected to server');
+      status.classList.remove('reconnecting');
+      
+      if (hasJoinedGame && playerName && selectedIcon) {
+        // Reconnecting - check if we can rejoin
+        socket.emit('check-rejoin', {
+          roomCode: roomCode,
+          playerName: playerName,
+          playerIcon: selectedIcon
+        });
+        status.textContent = 'Reconnecting...';
+      } else if (buzzerScreen.classList.contains('active')) {
         status.textContent = 'Connected! Ready to buzz!';
         buzzerBtn.disabled = false;
       }
     });
-    
-    socket.on('room-full', () => {
-      alert('Sorry! This game is full (maximum 6 players).');
-      status.textContent = 'Room is full!';
-      buzzerBtn.disabled = true;
+
+    // NEW - Handle successful rejoin
+    socket.on('rejoin-success', (playerData) => {
+      console.log('Successfully rejoined!');
+      status.textContent = 'Reconnected! Ready to buzz!';
+      buzzerBtn.disabled = false;
+      hasJoinedGame = true;
+    });
+
+    // NEW - Handle rejoin failure
+    socket.on('rejoin-failed', () => {
+      console.log('Rejoin failed - starting fresh');
+      hasJoinedGame = false;
+      registrationScreen.classList.add('active');
+      buzzerScreen.classList.remove('active');
+    });
+
+    // NEW - Handle being kicked
+    socket.on('kicked-from-room', () => {
+      localStorage.removeItem(`jeopardy_player_${roomCode}`);
+      alert('You have been removed from the game by the host.');
+      window.location.reload();
     });
     
     socket.on('disconnect', () => {
-      status.textContent = 'Disconnected! Reconnecting...';
+      console.log('Disconnected from server');
+      status.textContent = 'Connection lost! Reconnecting...';
+      status.classList.add('reconnecting');
       buzzerBtn.disabled = true;
     });
     
@@ -518,7 +611,7 @@
       status.textContent = 'Game has started! Get ready!';
     });
 
-    // NEW - Final Jeopardy listeners
+    // Final Jeopardy listeners
     socket.on('start-final-wagering', (data) => {
       finalJeopardyMode = 'wagering';
       currentScore = data.playerScore || 0;

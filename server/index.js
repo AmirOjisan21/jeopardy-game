@@ -2,8 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
-const path = require('path'); // NEW - Add this at the top
-
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,54 +10,87 @@ const io = socketIo(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
-  }
+  },
+  // NEW - Better reconnection settings
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
-
 app.use(cors());
-
 
 // Game rooms storage
 const rooms = {};
 
-
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
   let currentRoom = null;
-
 
   // Create room
   socket.on('create-room', (roomCode) => {
     rooms[roomCode] = {
       players: [],
       buzzedPlayer: null,
-      lockedPlayers: new Set()
+      lockedPlayers: new Set(),
+      gameStarted: false // NEW - Track game state
     };
     currentRoom = roomCode;
     socket.join(roomCode);
     console.log(`Room created: ${roomCode}`);
   });
 
+  // NEW - Check if player already exists (for reconnection)
+  socket.on('check-rejoin', ({ roomCode, playerName, playerIcon }) => {
+    if (!rooms[roomCode]) {
+      socket.emit('room-not-found');
+      return;
+    }
+
+    const existingPlayer = rooms[roomCode].players.find(
+      p => p.name === playerName && p.icon === playerIcon
+    );
+
+    if (existingPlayer) {
+      // Player exists - update their socket ID
+      existingPlayer.id = socket.id;
+      currentRoom = roomCode;
+      socket.join(roomCode);
+      socket.emit('rejoin-success', existingPlayer);
+      io.to(roomCode).emit('players-update', rooms[roomCode].players);
+      console.log(`${playerName} reconnected to room ${roomCode}`);
+    } else {
+      socket.emit('rejoin-failed');
+    }
+  });
 
   // Player joins
   socket.on('join-game', (playerData) => {
     const roomCode = playerData.roomCode || 'GAME123';
     currentRoom = roomCode;
 
-
     if (!rooms[roomCode]) {
-      rooms[roomCode] = { players: [], buzzedPlayer: null };
+      rooms[roomCode] = { 
+        players: [], 
+        buzzedPlayer: null, 
+        lockedPlayers: new Set(),
+        gameStarted: false 
+      };
     }
 
+    // NEW - Check if player already exists (prevent duplicates)
+    const existingPlayer = rooms[roomCode].players.find(
+      p => p.name === playerData.name && p.icon === playerData.icon
+    );
 
-    // Check if room is full (max 6 players)
-    if (rooms[roomCode].players.length >= 6) {
-      socket.emit('room-full');
-      console.log(`Room ${roomCode} is full. Player rejected.`);
+    if (existingPlayer) {
+      // Update existing player's socket ID
+      existingPlayer.id = socket.id;
+      socket.join(roomCode);
+      io.to(roomCode).emit('players-update', rooms[roomCode].players);
+      console.log(`${playerData.name} reconnected (duplicate prevented)`);
       return;
     }
 
-
+    // NEW - No more player limit!
     const player = {
       id: socket.id,
       name: playerData.name,
@@ -69,9 +101,18 @@ io.on('connection', (socket) => {
     rooms[roomCode].players.push(player);
     socket.join(roomCode);
     io.to(roomCode).emit('players-update', rooms[roomCode].players);
-    console.log(`${playerData.name} joined room ${roomCode}`);
+    console.log(`${playerData.name} joined room ${roomCode} (${rooms[roomCode].players.length} players)`);
   });
 
+  // NEW - Kick player (host only, waiting room only)
+  socket.on('kick-player', ({ roomCode, playerId }) => {
+    if (!rooms[roomCode] || rooms[roomCode].gameStarted) return;
+    
+    rooms[roomCode].players = rooms[roomCode].players.filter(p => p.id !== playerId);
+    io.to(playerId).emit('kicked-from-room');
+    io.to(roomCode).emit('players-update', rooms[roomCode].players);
+    console.log(`Player ${playerId} kicked from room ${roomCode}`);
+  });
 
   // Player buzzes
   socket.on('buzz', () => {
@@ -88,7 +129,6 @@ io.on('connection', (socket) => {
     }
   });
 
-
   socket.on('lock-player', (playerIdToLock) => {
     if (currentRoom && rooms[currentRoom]) {
       rooms[currentRoom].lockedPlayers.add(playerIdToLock);
@@ -96,7 +136,6 @@ io.on('connection', (socket) => {
       console.log(`Player ${playerIdToLock} locked out in room ${currentRoom}`);
     }
   });
-
 
   // Reset buzzer
   socket.on('full-reset', () => {
@@ -110,7 +149,6 @@ io.on('connection', (socket) => {
     }
   });
 
-
   socket.on('clear-buzz-only', () => {
     if (currentRoom && rooms[currentRoom]) {
       rooms[currentRoom].buzzedPlayer = null; 
@@ -118,7 +156,6 @@ io.on('connection', (socket) => {
       console.log('Buzz winner cleared in room:', currentRoom);
     }
   });
-
 
   // Update scores
   socket.on('update-scores', (updatedPlayers) => {
@@ -128,15 +165,14 @@ io.on('connection', (socket) => {
     }
   });
 
-
-  // Start game
+  // Start game - NEW: Mark game as started
   socket.on('start-game', () => {
-    if (currentRoom) {
+    if (currentRoom && rooms[currentRoom]) {
+      rooms[currentRoom].gameStarted = true;
       io.to(currentRoom).emit('game-started');
       console.log('Game started in room:', currentRoom);
     }
   });
-
 
   // Final Jeopardy: Submit Wager
   socket.on('submit-wager', ({ roomCode, playerId, wager }) => {
@@ -144,13 +180,11 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('wager-submitted', { playerId, wager });
   });
 
-
   // Final Jeopardy: Submit Answer
   socket.on('submit-final-answer', ({ roomCode, playerId, answer }) => {
     console.log(`Player ${playerId} answered: ${answer}`);
     io.to(roomCode).emit('final-answer-submitted', { playerId, answer });
   });
-
 
   // Final Jeopardy: Start Wagering
   socket.on('start-final-wagering', (roomCode) => {
@@ -166,33 +200,29 @@ io.on('connection', (socket) => {
     }
   });
 
-
   // Final Jeopardy: Start Question
   socket.on('start-final-question', (roomCode) => {
     io.to(roomCode).emit('start-final-question');
     console.log(`Final Jeopardy question revealed in room ${roomCode}`);
   });
 
-
-  // Disconnect
+  // Disconnect - NEW: Keep player in list (don't remove immediately)
   socket.on('disconnect', () => {
-    if (currentRoom && rooms[currentRoom]) {
-      rooms[currentRoom].players = rooms[currentRoom].players.filter(p => p.id !== socket.id);
-      io.to(currentRoom).emit('players-update', rooms[currentRoom].players);
-      console.log('Client disconnected:', socket.id);
-    }
+    console.log('Client disconnected:', socket.id);
+    // Player stays in the room - can reconnect
+    // Only removed if kicked or room is deleted
   });
 });
 
-// NEW - Serve static files for production
+// Serve static files for production
 app.use(express.static(path.join(__dirname, '../client/build')));
 
-// NEW - Serve buzzer page
+// Serve buzzer page
 app.get('/buzzer', (req, res) => {
   res.sendFile(path.join(__dirname, '../buzzer/index.html'));
 });
 
-const PORT = process.env.PORT || 3001; // UPDATED - use environment PORT or 3001
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
