@@ -31,7 +31,10 @@ io.on('connection', (socket) => {
       buzzedPlayer: null,
       lockedPlayers: new Set(),
       gameStarted: false,
-      activePlayerId: null // NEW - Track active player
+      activePlayerId: null,
+      finalJeopardyPhase: null, // NEW - Track Final Jeopardy phase
+      playerWagers: {}, // NEW - Track wagers
+      playerAnswers: {} // NEW - Track answers
     };
     currentRoom = roomCode;
     socket.join(roomCode);
@@ -57,9 +60,25 @@ io.on('connection', (socket) => {
       socket.emit('rejoin-success', existingPlayer);
       io.to(roomCode).emit('players-update', rooms[roomCode].players);
       
-      // NEW - Send active player to reconnecting client
+      // Send active player to reconnecting client
       if (rooms[roomCode].activePlayerId) {
         socket.emit('active-player-update', rooms[roomCode].activePlayerId);
+      }
+      
+      // NEW - Send Final Jeopardy state to reconnecting client
+      if (rooms[roomCode].finalJeopardyPhase) {
+        const phase = rooms[roomCode].finalJeopardyPhase;
+        const playerId = existingPlayer.id;
+        
+        socket.emit('restore-final-jeopardy-state', {
+          phase: phase,
+          hasWagered: rooms[roomCode].playerWagers[playerId] !== undefined,
+          hasAnswered: rooms[roomCode].playerAnswers[playerId] !== undefined,
+          wager: rooms[roomCode].playerWagers[playerId],
+          answer: rooms[roomCode].playerAnswers[playerId]
+        });
+        
+        console.log(`Restored Final Jeopardy state (${phase}) for ${playerName}`);
       }
       
       console.log(`${playerName} reconnected to room ${roomCode}`);
@@ -79,7 +98,10 @@ io.on('connection', (socket) => {
         buzzedPlayer: null, 
         lockedPlayers: new Set(),
         gameStarted: false,
-        activePlayerId: null // NEW
+        activePlayerId: null,
+        finalJeopardyPhase: null,
+        playerWagers: {},
+        playerAnswers: {}
       };
     }
 
@@ -94,9 +116,23 @@ io.on('connection', (socket) => {
       socket.join(roomCode);
       io.to(roomCode).emit('players-update', rooms[roomCode].players);
       
-      // NEW - Send active player to reconnecting client
+      // Send active player to reconnecting client
       if (rooms[roomCode].activePlayerId) {
         socket.emit('active-player-update', rooms[roomCode].activePlayerId);
+      }
+      
+      // NEW - Send Final Jeopardy state to reconnecting client
+      if (rooms[roomCode].finalJeopardyPhase) {
+        const phase = rooms[roomCode].finalJeopardyPhase;
+        const playerId = existingPlayer.id;
+        
+        socket.emit('restore-final-jeopardy-state', {
+          phase: phase,
+          hasWagered: rooms[roomCode].playerWagers[playerId] !== undefined,
+          hasAnswered: rooms[roomCode].playerAnswers[playerId] !== undefined,
+          wager: rooms[roomCode].playerWagers[playerId],
+          answer: rooms[roomCode].playerAnswers[playerId]
+        });
       }
       
       console.log(`${playerData.name} reconnected (duplicate prevented)`);
@@ -116,7 +152,7 @@ io.on('connection', (socket) => {
     console.log(`${playerData.name} joined room ${roomCode} (${rooms[roomCode].players.length} players)`);
   });
 
-  // NEW - Set active player (host updates)
+  // Set active player
   socket.on('set-active-player', (roomCode, playerId) => {
     if (rooms[roomCode]) {
       rooms[roomCode].activePlayerId = playerId;
@@ -125,13 +161,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Kick player (host only, waiting room only)
+  // Kick player
   socket.on('kick-player', ({ roomCode, playerId }) => {
     if (!rooms[roomCode] || rooms[roomCode].gameStarted) return;
     
     rooms[roomCode].players = rooms[roomCode].players.filter(p => p.id !== playerId);
     
-    // NEW - If kicked player was active, clear active player
     if (rooms[roomCode].activePlayerId === playerId) {
       rooms[roomCode].activePlayerId = null;
       io.to(roomCode).emit('active-player-update', null);
@@ -202,22 +237,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Final Jeopardy: Submit Wager
-  socket.on('submit-wager', ({ roomCode, playerId, wager }) => {
-    console.log(`Player ${playerId} wagered $${wager}`);
-    io.to(roomCode).emit('wager-submitted', { playerId, wager });
-  });
-
-  // Final Jeopardy: Submit Answer
-  socket.on('submit-final-answer', ({ roomCode, playerId, answer }) => {
-    console.log(`Player ${playerId} answered: ${answer}`);
-    io.to(roomCode).emit('final-answer-submitted', { playerId, answer });
-  });
-
   // Final Jeopardy: Start Wagering
   socket.on('start-final-wagering', (roomCode) => {
     const room = rooms[roomCode];
     if (room) {
+      room.finalJeopardyPhase = 'wagering'; // NEW - Track phase
       room.players.forEach(player => {
         io.to(player.id).emit('start-final-wagering', { 
           playerScore: player.score,
@@ -228,16 +252,36 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Final Jeopardy: Submit Wager
+  socket.on('submit-wager', ({ roomCode, playerId, wager }) => {
+    if (rooms[roomCode]) {
+      rooms[roomCode].playerWagers[playerId] = wager; // NEW - Store wager
+    }
+    console.log(`Player ${playerId} wagered $${wager}`);
+    io.to(roomCode).emit('wager-submitted', { playerId, wager });
+  });
+
   // Final Jeopardy: Start Question
   socket.on('start-final-question', (roomCode) => {
+    if (rooms[roomCode]) {
+      rooms[roomCode].finalJeopardyPhase = 'question'; // NEW - Track phase
+    }
     io.to(roomCode).emit('start-final-question');
     console.log(`Final Jeopardy question revealed in room ${roomCode}`);
   });
 
-  // Disconnect - Keep player in list (can reconnect)
+  // Final Jeopardy: Submit Answer
+  socket.on('submit-final-answer', ({ roomCode, playerId, answer }) => {
+    if (rooms[roomCode]) {
+      rooms[roomCode].playerAnswers[playerId] = answer; // NEW - Store answer
+    }
+    console.log(`Player ${playerId} answered: ${answer}`);
+    io.to(roomCode).emit('final-answer-submitted', { playerId, answer });
+  });
+
+  // Disconnect
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
-    // Player stays in the room - can reconnect
   });
 });
 
